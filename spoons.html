@@ -1,0 +1,67 @@
+<script src="words.js"></script>
+<script src="rhymes.js"></script>
+<script src="phoneticRhymes.js"></script>
+<script src="rhyme-table.js"></script>
+<script src="top-fifty.js"></script>
+<script src="wordFrequency.js"></script>
+<script>
+    function removeFirstWordUsingSubString( input ) {
+       return input.substring(input.indexOf(" ") + 1, input.length );
+    }
+    function findFirstWordUsingSubString( input ) {
+       return input.substring( 0, input.indexOf(" ") );
+    }
+    function findLastTwoWords( input ) {
+        const inputArray = input.split(' ');
+        return inputArray[ inputArray.length - 2 ] + ' ' +[ inputArray.length - 1 ];
+    }
+
+    // Return elements of array a that are also in b in linear time:
+    function intersect(a, b) {
+        return a.filter(Set.prototype.has, new Set(b));
+    }
+    function getRhymes( word ) {
+        const rhyme = removeFirstWordUsingSubString( words[ word ] );
+        return rhymes[ rhyme ];
+    }
+
+    function getSpoonerisms( word ) {
+        const rhyme = removeFirstWordUsingSubString( words[ word ] );
+        const firstLetter = findFirstWordUsingSubString( words[ word ] );
+        const rhymesWithLetter = rhymeTable[firstLetter];
+
+        const soundToUse = Object.keys(rhymeTable).find( firstSound => {
+            if ( firstSound !== firstLetter && rhymeTable[ firstSound ].indexOf(rhyme) > -1 && intersect( rhymesWithLetter, rhymeTable[ firstSound ] ).length > 0 ) {
+                return firstSound
+            }
+        } );
+
+        const rhymeToUse = soundToUse + ' ' + rhyme;
+        const otherWord = Object.keys(words).find( word => {
+            return words[ word ] === rhymeToUse;
+        } );
+
+        const intersectionOfTwoLetters = intersect( rhymesWithLetter, rhymeTable[ soundToUse ] );
+        const phoneticMatch = phoneticRhymes[ intersectionOfTwoLetters[0] ].find( phoneticRhyme => findFirstWordUsingSubString( phoneticRhyme ) ===  soundToUse );
+        const wordMatch = Object.keys(words).find( word => {
+            return words[ word ] === phoneticMatch;
+        } );
+        const rhymePairPhonetic = firstLetter + " " + intersectionOfTwoLetters[0];
+        const rhymePair = Object.keys(words).find( word => {
+            return words[ word ] === rhymePairPhonetic;
+        } );
+        return [ wordMatch, otherWord, rhymePair ];
+    }
+    function displaySpoonerisms() {
+        const wordToFind = document.getElementById('word').value;
+        const spoonerisms = getSpoonerisms( wordToFind );
+        document.getElementById('input').innerText = wordToFind + " " + spoonerisms[0];
+        document.getElementById('result').innerText = spoonerisms[1] + " " + spoonerisms[2];
+    }
+
+</script>
+<form onSubmit="javascript:displaySpoonerisms(); return false;">
+<input type="text" id="word" />
+</form>
+<h1 id="input"></h1>
+<h1 id="result"></h1>
