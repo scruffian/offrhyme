@@ -567,8 +567,8 @@
                     else if (rank < 30000) opacity = 0.55;
                     else opacity = 0.4;
 
-                    const bgColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
-                    const textColor = '#000'; // Always use black text for better contrast
+                    // Use color for border and text, keep background neutral
+                    const colorRgba = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
 
                     // Determine level name
                     let levelName;
@@ -582,7 +582,7 @@
 
                     const title = `${levelName} (similarity: ${similarity}, range: ${minSim}-${maxSim})`;
 
-                    return `<div class="rhyme-word" style="background: ${bgColor}; color: ${textColor}; border-color: ${bgColor};" title="${title}">${word}</div>`;
+                    return `<div class="rhyme-word" style="background: transparent; color: ${colorRgba}; border-color: ${colorRgba};" title="${title}">${word}</div>`;
                 }).join('');
 
                 html += `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">${wordsHtml}</div>`;
