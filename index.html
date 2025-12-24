@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#1a1a1a">
     <meta name="description" content="Find perfect rhymes for any word using phonetic matching">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
     <title>offrhyme - Find rhymes offline</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -261,6 +261,54 @@
             font-style: italic;
         }
 
+        .install-prompt {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #333;
+            border-top: 1px solid #444;
+            padding: 15px 20px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            z-index: 1000;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .install-prompt.show {
+            display: flex;
+        }
+
+        .install-prompt-text {
+            flex: 1;
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+
+        .install-prompt-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .install-prompt button {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .install-prompt .dismiss {
+            background: transparent;
+            border: 1px solid #666;
+            color: #999;
+        }
+
+        .install-prompt .dismiss:hover {
+            background: #444;
+            color: #fff;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 2rem;
@@ -277,10 +325,33 @@
             button {
                 width: 100%;
             }
+
+            .install-prompt {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .install-prompt-buttons {
+                flex-direction: column;
+            }
+
+            .install-prompt button {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="install-prompt" id="install-prompt">
+        <div class="install-prompt-text">
+            Add offrhyme to your home screen for quick access and offline use
+        </div>
+        <div class="install-prompt-buttons">
+            <button id="install-button">Install</button>
+            <button class="dismiss" id="dismiss-button">Dismiss</button>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <h1>offrhyme</h1>
@@ -676,7 +747,7 @@
         // Register service worker for offline support
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
+                navigator.serviceWorker.register('service-worker.js')
                     .then(registration => {
                         console.log('ServiceWorker registered:', registration);
                     })
@@ -685,6 +756,55 @@
                     });
             });
         }
+
+        // PWA install prompt
+        let deferredPrompt;
+        const installPrompt = document.getElementById('install-prompt');
+        const installButton = document.getElementById('install-button');
+        const dismissButton = document.getElementById('dismiss-button');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent the mini-infobar from appearing on mobile
+            e.preventDefault();
+            // Store the event so it can be triggered later
+            deferredPrompt = e;
+
+            // Check if user has previously dismissed
+            const dismissed = localStorage.getItem('install-prompt-dismissed');
+            if (!dismissed) {
+                // Show the install prompt
+                installPrompt.classList.add('show');
+            }
+        });
+
+        installButton.addEventListener('click', async () => {
+            if (!deferredPrompt) {
+                return;
+            }
+            // Show the install prompt
+            deferredPrompt.prompt();
+            // Wait for the user's response
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User response: ${outcome}`);
+            // Clear the deferredPrompt
+            deferredPrompt = null;
+            // Hide the install prompt
+            installPrompt.classList.remove('show');
+        });
+
+        dismissButton.addEventListener('click', () => {
+            // Hide the install prompt
+            installPrompt.classList.remove('show');
+            // Remember that user dismissed it
+            localStorage.setItem('install-prompt-dismissed', 'true');
+        });
+
+        // Listen for successful installation
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA was installed');
+            installPrompt.classList.remove('show');
+            deferredPrompt = null;
+        });
     </script>
 </body>
 </html>

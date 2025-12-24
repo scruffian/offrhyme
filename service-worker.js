@@ -1,14 +1,14 @@
-const CACHE_NAME = 'offrhyme-v39';
+const CACHE_NAME = 'offrhyme-v46';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/spoons.html',
-  '/words.js',
-  '/rhymes.js',
-  '/phoneticRhymes.js',
-  '/rhyme-table.js',
-  '/top-fifty.js',
-  '/wordFrequency.js'
+  './',
+  './index.html',
+  './spoons.html',
+  './words.js',
+  './rhymes.js',
+  './phoneticRhymes.js',
+  './rhyme-table.js',
+  './top-fifty.js',
+  './wordFrequency.js'
 ];
 
 // Install service worker and cache assets
