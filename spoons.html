@@ -337,8 +337,16 @@
         }
 
         function displaySpoonerisms( event ) {
-            event.preventDefault();
-            const wordToFind = document.getElementById('word').value.toLowerCase();
+            if (event) event.preventDefault();
+
+            const wordToFind = document.getElementById('word').value.toLowerCase().trim();
+            if (!wordToFind) return false;
+
+            // Update URL with search parameter
+            const url = new URL(window.location);
+            url.searchParams.set('word', wordToFind);
+            window.history.pushState({}, '', url);
+
             const resultsContainer = document.getElementById('results-container');
             const inputElement = document.getElementById('input');
             const resultElement = document.getElementById('result');
@@ -361,6 +369,19 @@
             }
             return false;
         }
+
+        // Load spoonerism from URL parameter on page load
+        function loadFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const word = urlParams.get('word');
+            if (word) {
+                document.getElementById('word').value = word;
+                displaySpoonerisms(null);
+            }
+        }
+
+        // Load from URL when page loads
+        window.addEventListener('load', loadFromURL);
 
         // Register service worker for offline support
         if ('serviceWorker' in navigator) {

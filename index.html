@@ -156,8 +156,84 @@
         #result {
             color: #555;
             font-size: 1.1rem;
-            line-height: 2;
             word-wrap: break-word;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .rhyme-word {
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .rhyme-word:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Popularity color tiers */
+        .popularity-very-high {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .popularity-high {
+            background: linear-gradient(135deg, #7b8ceb 0%, #8d5fb8 100%);
+        }
+
+        .popularity-medium {
+            background: linear-gradient(135deg, #9da9ed 0%, #a87dc9 100%);
+        }
+
+        .popularity-low {
+            background: linear-gradient(135deg, #b8c3f0 0%, #c29dd9 100%);
+        }
+
+        .popularity-very-low {
+            background: linear-gradient(135deg, #d3ddf3 0%, #ddbce7 100%);
+            color: #555;
+        }
+
+        .popularity-rare {
+            background: #e8e8e8;
+            color: #777;
+        }
+
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
         }
 
         .empty-state {
@@ -210,6 +286,27 @@
                 />
                 <button type="submit">Find Rhymes</button>
             </form>
+            <div class="legend">
+                <div class="legend-title">Color indicates word popularity:</div>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                        <span>Very common</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #9da9ed 0%, #a87dc9 100%);"></div>
+                        <span>Common</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #d3ddf3 0%, #ddbce7 100%);"></div>
+                        <span>Less common</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #e8e8e8;"></div>
+                        <span>Rare</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="results" id="results-container">
@@ -263,8 +360,24 @@
             return rhymes[ rhyme ];
         }
 
+        function getPopularityClass(rank) {
+            if (rank < 1000) return 'popularity-very-high';
+            if (rank < 5000) return 'popularity-high';
+            if (rank < 15000) return 'popularity-medium';
+            if (rank < 30000) return 'popularity-low';
+            if (rank < 50000) return 'popularity-very-low';
+            return 'popularity-rare';
+        }
+
         function displayRhymes() {
-            const wordToFind = document.getElementById('word').value.toLowerCase();
+            const wordToFind = document.getElementById('word').value.toLowerCase().trim();
+            if (!wordToFind) return;
+
+            // Update URL with search parameter
+            const url = new URL(window.location);
+            url.searchParams.set('word', wordToFind);
+            window.history.pushState({}, '', url);
+
             const rhymesList = getRhymes( wordToFind );
             const resultsContainer = document.getElementById('results-container');
             const resultElement = document.getElementById('result');
@@ -281,7 +394,12 @@
                 });
 
                 if (sortedRhymes.length > 0) {
-                    resultElement.innerText = sortedRhymes.join(', ');
+                    // Create color-coded pills for each rhyme
+                    resultElement.innerHTML = sortedRhymes.map(word => {
+                        const rank = wordRank[word] !== undefined ? wordRank[word] : 999999;
+                        const popularityClass = getPopularityClass(rank);
+                        return `<div class="rhyme-word ${popularityClass}">${word}</div>`;
+                    }).join('');
                     resultsContainer.classList.add('show');
                 } else {
                     resultElement.innerHTML = '<p class="empty-state">No rhymes found. Try another word!</p>';
@@ -292,6 +410,19 @@
                 resultsContainer.classList.add('show');
             }
         }
+
+        // Load rhyme from URL parameter on page load
+        function loadFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const word = urlParams.get('word');
+            if (word) {
+                document.getElementById('word').value = word;
+                displayRhymes();
+            }
+        }
+
+        // Load from URL when page loads
+        window.addEventListener('load', loadFromURL);
 
         // Register service worker for offline support
         if ('serviceWorker' in navigator) {
