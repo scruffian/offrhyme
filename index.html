@@ -71,25 +71,90 @@
         }
 
         .search-section {
+            position: sticky;
+            top: 0;
+            background: #1a1a1a;
             padding: 30px 0;
             margin-bottom: 30px;
+            z-index: 100;
+            border-bottom: 1px solid #333;
         }
 
         form {
             display: flex;
+            flex-direction: column;
             gap: 12px;
             margin-bottom: 25px;
         }
 
-        input[type="text"] {
+        .form-row {
+            display: flex;
+            gap: 12px;
+            position: relative;
+        }
+
+        .input-wrapper {
             flex: 1;
+            position: relative;
+        }
+
+        .autocomplete-hint {
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            padding: 12px 16px;
+            font-size: 1rem;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            color: #555;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 1;
+        }
+
+        .autocomplete-dropdown {
+            background: #222;
+            border: 1px solid #444;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .autocomplete-dropdown.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            color: #ccc;
+            border-bottom: 1px solid #333;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: #333;
+            color: #fff;
+        }
+
+        input[type="text"] {
+            width: 100%;
             padding: 12px 16px;
             font-size: 1rem;
             border: 1px solid #444;
-            background: #1a1a1a;
+            background: transparent;
             color: #ffffff;
             font-family: 'JetBrains Mono', 'Courier New', monospace;
             outline: none;
+            position: relative;
+            z-index: 2;
+        }
+
+        .input-wrapper {
+            background: #1a1a1a;
         }
 
         input[type="text"]::placeholder {
@@ -210,6 +275,9 @@
             transition: all 0.2s ease;
             font-weight: 400;
             font-size: 0.9rem;
+            flex: 1 1 auto;
+            text-align: center;
+            min-width: fit-content;
         }
 
         .rhyme-word:hover {
@@ -318,7 +386,7 @@
                 padding: 20px;
             }
 
-            form {
+            .form-row {
                 flex-direction: column;
             }
 
@@ -364,14 +432,20 @@
 
         <div class="search-section">
             <form onsubmit="displayRhymes(); return false;">
-                <input
-                    type="text"
-                    id="word"
-                    placeholder="Enter a word..."
-                    autocomplete="off"
-                    required
-                />
-                <button type="submit">Search</button>
+                <div class="form-row">
+                    <div class="input-wrapper">
+                        <div class="autocomplete-hint" id="autocomplete-hint"></div>
+                        <input
+                            type="text"
+                            id="word"
+                            placeholder="Enter a word..."
+                            autocomplete="off"
+                            required
+                        />
+                    </div>
+                    <button type="submit">Search</button>
+                </div>
+                <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
             </form>
         </div>
 
@@ -521,6 +595,44 @@
                 return { word: w, similarity };
             }).filter(item => item !== null);
 
+            // Also include words that share the same starting phonemes (ignoring stress)
+            const searchPhonemes = phonetic.split(' ').map(ph => ph.replace(/[012]/g, ''));
+            Object.keys(words).forEach(w => {
+                if (w === word) return;
+                const wPhonemes = words[w].split(' ').map(ph => ph.replace(/[012]/g, ''));
+
+                // Check if this word starts with all the search word's phonemes
+                // OR if the search word starts with all of this word's phonemes
+                if (wPhonemes.length > searchPhonemes.length) {
+                    let matches = true;
+                    for (let i = 0; i < searchPhonemes.length; i++) {
+                        if (searchPhonemes[i] !== wPhonemes[i]) {
+                            matches = false;
+                            break;
+                        }
+                    }
+
+                    if (matches && !frontRhymesWithScores.find(item => item.word === w)) {
+                        const similarity = calculateSimilarity(phonetic, words[w]);
+                        frontRhymesWithScores.push({ word: w, similarity });
+                    }
+                } else if (wPhonemes.length < searchPhonemes.length) {
+                    // Check reverse: does search word start with this word?
+                    let matches = true;
+                    for (let i = 0; i < wPhonemes.length; i++) {
+                        if (searchPhonemes[i] !== wPhonemes[i]) {
+                            matches = false;
+                            break;
+                        }
+                    }
+
+                    if (matches && !frontRhymesWithScores.find(item => item.word === w)) {
+                        const similarity = calculateSimilarity(phonetic, words[w]);
+                        frontRhymesWithScores.push({ word: w, similarity });
+                    }
+                }
+            });
+
             // Sort by similarity (highest first), then by frequency
             return frontRhymesWithScores.sort((a, b) => {
                 if (a.similarity !== b.similarity) {
@@ -625,12 +737,17 @@
                 const targetLast = targetPhonemes[targetPhonemes.length - 1].replace(/[012]/g, '');
                 const patternLast = patternPhonemes[patternPhonemes.length - 1].replace(/[012]/g, '');
 
-                if (targetLast === patternLast && targetPhonemes.length === patternPhonemes.length) {
+                // Allow patterns of similar length (within 2 phonemes)
+                const lengthDiff = Math.abs(targetPhonemes.length - patternPhonemes.length);
+
+                if (targetLast === patternLast && lengthDiff <= 2) {
                     // Add words from this rhyme group with similarity scores
                     rhymes[rhymePattern].slice(0, 30).forEach(w => {
                         if (w !== word && !perfectRhymes.includes(w)) {
                             const similarity = calculateSimilarity(phonetic, words[w]);
-                            nearRhymesWithScores.push({ word: w, similarity });
+                            if (similarity > 0) {  // Only include if there's some similarity
+                                nearRhymesWithScores.push({ word: w, similarity });
+                            }
                         }
                     });
                 }
@@ -715,61 +832,42 @@
             const minSim = Math.min(...similarities);
             const maxSim = Math.max(...similarities);
 
-            // Group by exact similarity score
-            const groupsBySimilarity = {};
+            // Render all words in a single container (no grouping by similarity)
+            const wordsHtml = wordList.map(item => {
+                const word = item.word;
+                const similarity = item.similarity;
+                const rank = wordRank[word] !== undefined ? wordRank[word] : 999999;
 
-            wordList.forEach(item => {
-                if (!groupsBySimilarity[item.similarity]) {
-                    groupsBySimilarity[item.similarity] = [];
-                }
-                groupsBySimilarity[item.similarity].push(item);
-            });
+                // Get heatmap color based on similarity with dynamic range
+                const color = getSimilarityColor(similarity, minSim, maxSim);
 
-            // Sort by similarity (descending)
-            const sortedSimilarities = Object.keys(groupsBySimilarity).map(Number).sort((a, b) => b - a);
+                // Opacity based on frequency (more common = more opaque)
+                let opacity;
+                if (rank < 1000) opacity = 1.0;
+                else if (rank < 5000) opacity = 0.85;
+                else if (rank < 15000) opacity = 0.7;
+                else if (rank < 30000) opacity = 0.55;
+                else opacity = 0.4;
 
-            let html = '';
+                // Use color for border and text, keep background neutral
+                const colorRgba = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
 
-            sortedSimilarities.forEach(similarity => {
-                const items = groupsBySimilarity[similarity];
+                // Determine level name
+                let levelName;
+                if (similarity >= 32) levelName = 'excellent';
+                else if (similarity >= 24) levelName = 'very good';
+                else if (similarity >= 16) levelName = 'good';
+                else if (similarity >= 12) levelName = 'moderate';
+                else if (similarity >= 8) levelName = 'fair';
+                else if (similarity >= 4) levelName = 'weak';
+                else levelName = 'poor';
 
-                const wordsHtml = items.map(item => {
-                    const word = item.word;
-                    const rank = wordRank[word] !== undefined ? wordRank[word] : 999999;
+                const title = `${levelName} (similarity: ${similarity}, range: ${minSim}-${maxSim})`;
 
-                    // Get heatmap color based on similarity with dynamic range
-                    const color = getSimilarityColor(similarity, minSim, maxSim);
+                return `<div class="rhyme-word" style="background: transparent; color: ${colorRgba}; border-color: ${colorRgba};" title="${title}">${word}</div>`;
+            }).join('');
 
-                    // Opacity based on frequency (more common = more opaque)
-                    let opacity;
-                    if (rank < 1000) opacity = 1.0;
-                    else if (rank < 5000) opacity = 0.85;
-                    else if (rank < 15000) opacity = 0.7;
-                    else if (rank < 30000) opacity = 0.55;
-                    else opacity = 0.4;
-
-                    // Use color for border and text, keep background neutral
-                    const colorRgba = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
-
-                    // Determine level name
-                    let levelName;
-                    if (similarity >= 32) levelName = 'excellent';
-                    else if (similarity >= 24) levelName = 'very good';
-                    else if (similarity >= 16) levelName = 'good';
-                    else if (similarity >= 12) levelName = 'moderate';
-                    else if (similarity >= 8) levelName = 'fair';
-                    else if (similarity >= 4) levelName = 'weak';
-                    else levelName = 'poor';
-
-                    const title = `${levelName} (similarity: ${similarity}, range: ${minSim}-${maxSim})`;
-
-                    return `<div class="rhyme-word" style="background: transparent; color: ${colorRgba}; border-color: ${colorRgba};" title="${title}">${word}</div>`;
-                }).join('');
-
-                html += `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">${wordsHtml}</div>`;
-            });
-
-            return html;
+            return wordsHtml;
         }
 
         function displayRhymes() {
@@ -795,14 +893,12 @@
             // Front rhymes and near rhymes are now objects with word and similarity
             const filteredFrontRhymes = frontRhymesList.filter(item =>
                 item.word !== wordToFind &&
-                !/\(\d+\)$/.test(item.word) &&
-                wordRank[item.word] !== undefined
+                !/\(\d+\)$/.test(item.word)
             );
 
             const filteredNearRhymes = nearRhymesList.filter(item =>
                 item.word !== wordToFind &&
-                !/\(\d+\)$/.test(item.word) &&
-                wordRank[item.word] !== undefined
+                !/\(\d+\)$/.test(item.word)
             );
 
             // Sort perfect rhymes by word frequency
@@ -838,7 +934,9 @@
                     html += `
                         <div class="rhyme-section">
                             <h3>Front Rhymes</h3>
-                            ${renderNearRhymeWords(sortedFrontRhymes)}
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${renderNearRhymeWords(sortedFrontRhymes)}
+                            </div>
                         </div>
                     `;
                 } else {
@@ -849,7 +947,9 @@
                     html += `
                         <div class="rhyme-section">
                             <h3>Near Rhymes</h3>
-                            ${renderNearRhymeWords(sortedNearRhymes)}
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${renderNearRhymeWords(sortedNearRhymes)}
+                            </div>
                         </div>
                     `;
                 } else {
@@ -880,6 +980,145 @@
 
         // Load from URL when page loads
         window.addEventListener('load', loadFromURL);
+
+        // Autocomplete functionality
+        const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
+        const autocompleteHint = document.getElementById('autocomplete-hint');
+        let selectedIndex = -1;
+        let currentSuggestions = [];
+        let currentHint = '';
+
+        function showAutocomplete(suggestions) {
+            currentSuggestions = suggestions;
+            selectedIndex = -1;
+
+            // Show inline hint for first suggestion
+            if (suggestions.length > 0 && wordInput.value.length > 0) {
+                const hint = suggestions[0];
+                const inputValue = wordInput.value.toLowerCase();
+                if (hint.startsWith(inputValue)) {
+                    currentHint = hint;
+                    // Show the complete word - typed part will be covered by input, rest shows in gray
+                    autocompleteHint.textContent = hint;
+                } else {
+                    currentHint = '';
+                    autocompleteHint.textContent = '';
+                }
+            } else {
+                currentHint = '';
+                autocompleteHint.textContent = '';
+            }
+
+            // Show dropdown
+            if (suggestions.length === 0) {
+                autocompleteDropdown.classList.remove('show');
+                return;
+            }
+
+            const html = suggestions.map((word, index) =>
+                `<div class="autocomplete-item" data-index="${index}">${word}</div>`
+            ).join('');
+
+            autocompleteDropdown.innerHTML = html;
+            autocompleteDropdown.classList.add('show');
+
+            // Add click handlers
+            autocompleteDropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    wordInput.value = item.textContent;
+                    hideAutocomplete();
+                    displayRhymes();
+                });
+            });
+        }
+
+        function hideAutocomplete() {
+            autocompleteDropdown.classList.remove('show');
+            autocompleteHint.textContent = '';
+            currentSuggestions = [];
+            currentHint = '';
+            selectedIndex = -1;
+        }
+
+        // Live search as you type with debounce
+        let searchTimeout;
+        const wordInput = document.getElementById('word');
+        wordInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const value = e.target.value.toLowerCase().trim();
+
+            // Show autocomplete suggestions
+            if (value.length >= 2) {
+                const allWords = Object.keys(words);
+                const matches = allWords
+                    .filter(word => word.startsWith(value))
+                    .sort((a, b) => {
+                        const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
+                        const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
+                        return rankA - rankB;
+                    })
+                    .slice(0, 10);
+
+                showAutocomplete(matches);
+
+                // Wait 300ms after user stops typing to search
+                searchTimeout = setTimeout(() => {
+                    displayRhymes();
+                }, 300);
+            } else {
+                hideAutocomplete();
+            }
+        });
+
+        // Handle keyboard navigation
+        wordInput.addEventListener('keydown', (e) => {
+            // Handle Tab to accept inline hint
+            if (e.key === 'Tab' && currentHint) {
+                e.preventDefault();
+                wordInput.value = currentHint;
+                hideAutocomplete();
+                displayRhymes();
+                return;
+            }
+
+            if (!autocompleteDropdown.classList.contains('show')) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = Math.min(selectedIndex + 1, currentSuggestions.length - 1);
+                updateSelection();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = Math.max(selectedIndex - 1, -1);
+                updateSelection();
+            } else if (e.key === 'Enter' && selectedIndex >= 0) {
+                e.preventDefault();
+                wordInput.value = currentSuggestions[selectedIndex];
+                hideAutocomplete();
+                displayRhymes();
+            } else if (e.key === 'Escape') {
+                hideAutocomplete();
+            }
+        });
+
+        function updateSelection() {
+            const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+            items.forEach((item, index) => {
+                if (index === selectedIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        // Hide autocomplete when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!wordInput.contains(e.target) && !autocompleteDropdown.contains(e.target)) {
+                hideAutocomplete();
+            }
+        });
 
         // Register service worker for offline support
         if ('serviceWorker' in navigator) {
