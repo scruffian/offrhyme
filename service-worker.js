@@ -1,4 +1,4 @@
-const CACHE_NAME = 'offrhyme-v87';
+const CACHE_NAME = 'offrhyme-v98';
 const urlsToCache = [
   './',
   './index.html',
@@ -20,6 +20,8 @@ self.addEventListener('install', event => {
         return cache.addAll(urlsToCache);
       })
   );
+  // Force the waiting service worker to become the active service worker
+  self.skipWaiting();
 });
 
 // Fetch from cache first, then network
@@ -49,6 +51,9 @@ self.addEventListener('activate', event => {
           }
         })
       );
+    }).then(() => {
+      // Take control of all pages immediately
+      return self.clients.claim();
     })
   );
 });

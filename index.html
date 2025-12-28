@@ -74,7 +74,7 @@
             position: sticky;
             top: 0;
             background: #1a1a1a;
-            padding: 30px 0;
+            padding: 20px 0 10px;
             margin-bottom: 30px;
             z-index: 100;
             border-bottom: 1px solid #333;
@@ -163,7 +163,7 @@
 
         input[type="text"]:focus {
             border-color: #666;
-            background: #222;
+            background: transparent;
         }
 
         button {
@@ -398,6 +398,11 @@
                 grid-template-columns: 1fr;
             }
 
+            /* On mobile, show near rhymes before front rhymes */
+            .near-rhymes-section {
+                order: -1;
+            }
+
             .install-prompt {
                 flex-direction: column;
                 align-items: stretch;
@@ -410,7 +415,17 @@
             .install-prompt button {
                 width: 100%;
             }
+
+            /* On mobile, hide autocomplete - keyboard has its own autocomplete */
+            .autocomplete-dropdown {
+                display: none !important;
+            }
+
+            .autocomplete-hint {
+                display: none;
+            }
         }
+
     </style>
 </head>
 <body>
@@ -874,6 +889,9 @@
             const wordToFind = document.getElementById('word').value.toLowerCase().trim();
             if (!wordToFind) return;
 
+            // Scroll to top to show results
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
             // Update URL with search parameter
             const url = new URL(window.location);
             url.searchParams.set('word', wordToFind);
@@ -932,7 +950,7 @@
 
                 if (sortedFrontRhymes.length > 0) {
                     html += `
-                        <div class="rhyme-section">
+                        <div class="rhyme-section front-rhymes-section">
                             <h3>Front Rhymes</h3>
                             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                                 ${renderNearRhymeWords(sortedFrontRhymes)}
@@ -940,12 +958,12 @@
                         </div>
                     `;
                 } else {
-                    html += '<div></div>'; // Empty column
+                    html += '<div class="front-rhymes-section"></div>'; // Empty column
                 }
 
                 if (sortedNearRhymes.length > 0) {
                     html += `
-                        <div class="rhyme-section">
+                        <div class="rhyme-section near-rhymes-section">
                             <h3>Near Rhymes</h3>
                             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                                 ${renderNearRhymeWords(sortedNearRhymes)}
@@ -1068,6 +1086,11 @@
             } else {
                 hideAutocomplete();
             }
+        });
+
+        // Select all text when input is focused
+        wordInput.addEventListener('focus', (e) => {
+            e.target.select();
         });
 
         // Handle keyboard navigation
