@@ -886,22 +886,64 @@
         }
 
         function displayRhymes() {
-            const wordToFind = document.getElementById('word').value.toLowerCase().trim();
-            if (!wordToFind) return;
+            const input = document.getElementById('word').value.toLowerCase().trim();
+            if (!input) return;
 
             // Scroll to top to show results
             window.scrollTo({ top: 0, behavior: 'smooth' });
 
             // Update URL with search parameter
             const url = new URL(window.location);
-            url.searchParams.set('word', wordToFind);
+            url.searchParams.set('word', input);
             window.history.pushState({}, '', url);
 
+            // Split input by spaces or commas to detect multiple words
+            const words = input.split(/[\s,]+/).filter(w => w.length > 0);
+            const resultsContainer = document.getElementById('results-container');
+            const resultElement = document.getElementById('result');
+
+            // Multiple words mode: show perfect rhymes for each word in columns
+            if (words.length > 1) {
+                const wordRhymes = words.map(wordToFind => {
+                    const rhymesList = getRhymes(wordToFind);
+                    const filteredRhymes = rhymesList
+                        ? rhymesList.filter(word => word !== wordToFind && !/\(\d+\)$/.test(word))
+                        : [];
+
+                    // Sort by frequency
+                    const sortedRhymes = filteredRhymes.sort((a, b) => {
+                        const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
+                        const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
+                        return rankA - rankB;
+                    });
+
+                    return { word: wordToFind, rhymes: sortedRhymes };
+                });
+
+                let html = '<div class="two-column-container" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">';
+
+                wordRhymes.forEach(({ word, rhymes }) => {
+                    html += `
+                        <div class="rhyme-section">
+                            <h3>Perfect Rhymes for "${word}"</h3>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${rhymes.length > 0 ? renderRhymeWords(rhymes) : '<p class="empty-state">No rhymes found</p>'}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                resultElement.innerHTML = html;
+                resultsContainer.classList.add('show');
+                return;
+            }
+
+            // Single word mode: show perfect, near, and front rhymes
+            const wordToFind = words[0];
             const rhymesList = getRhymes( wordToFind );
             const frontRhymesList = getFrontRhymes( wordToFind );
             const nearRhymesList = getNearRhymes( wordToFind );
-            const resultsContainer = document.getElementById('results-container');
-            const resultElement = document.getElementById('result');
 
             // Filter out the search word itself and alternate pronunciations (e.g., "word(2)")
             const filteredRhymes = rhymesList
@@ -932,16 +974,15 @@
 
             let html = '';
 
-            if (sortedRhymes.length > 0) {
-                html += `
-                    <div class="rhyme-section">
-                        <h3>Perfect Rhymes</h3>
-                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            ${renderRhymeWords(sortedRhymes)}
-                        </div>
+            // Always show perfect rhymes section
+            html += `
+                <div class="rhyme-section">
+                    <h3>Perfect Rhymes</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        ${sortedRhymes.length > 0 ? renderRhymeWords(sortedRhymes) : '<p class="empty-state">No perfect rhymes found</p>'}
                     </div>
-                `;
-            }
+                </div>
+            `;
 
             // Two-column layout for front rhymes and near rhymes
             if (sortedFrontRhymes.length > 0 || sortedNearRhymes.length > 0) {
@@ -977,13 +1018,8 @@
                 html += '</div>';
             }
 
-            if (html) {
-                resultElement.innerHTML = html;
-                resultsContainer.classList.add('show');
-            } else {
-                resultElement.innerHTML = '<p class="empty-state">No rhymes found. Try another word!</p>';
-                resultsContainer.classList.add('show');
-            }
+            resultElement.innerHTML = html;
+            resultsContainer.classList.add('show');
         }
 
         // Load rhyme from URL parameter on page load
