@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#0a0a0a">
     <meta name="description" content="Create clever spoonerisms by swapping initial sounds of words">
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="logo.svg">
     <title>Spoonerizer - Offrhyme</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
@@ -43,12 +44,23 @@
             font-weight: 700;
             margin-bottom: 10px;
             letter-spacing: -1px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0;
+        }
+
+        .logo-inline {
+            width: 3.5rem;
+            height: 3.5rem;
+            display: inline-block;
+            vertical-align: baseline;
         }
 
         .subtitle {
             font-size: 1.2rem;
             opacity: 0.9;
             font-weight: 300;
+            text-align: center;
         }
 
         .nav-links {
@@ -296,7 +308,7 @@
 
     <div class="container">
         <header>
-            <h1>Spoonerizer</h1>
+            <h1>Sp<img src="logo.svg" alt="o" class="logo-inline">onerizer</h1>
             <p class="subtitle">Create clever spoonerisms from any word</p>
             <div class="nav-links">
                 <a href="index.html">← Back to Rhyme Finder</a>

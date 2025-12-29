@@ -1,8 +1,11 @@
-const CACHE_NAME = 'offrhyme-v100';
+const CACHE_NAME = 'offrhyme-v108';
 const urlsToCache = [
   './',
   './index.html',
   './spoons.html',
+  './logo.svg',
+  './icon-192.png',
+  './icon-512.png',
   './words.js',
   './rhymes.js',
   './phoneticRhymes.js',
