@@ -7,7 +7,7 @@
     <meta name="description" content="Find perfect rhymes for any word using phonetic matching">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="logo.svg">
-    <title>offrhyme - Find rhymes offline</title>
+    <title>0ffrhyme - Find rhymes offline</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -31,7 +31,6 @@
         }
 
         header {
-            margin-bottom: 40px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -39,7 +38,7 @@
 
         h1 {
             font-size: 2.5rem;
-            font-weight: 700;
+            font-weight: normal;
             color: #ffffff;
             margin-bottom: 8px;
             font-family: 'Courier New', monospace;
@@ -51,6 +50,7 @@
         .logo-inline {
             width: 2.5rem;
             height: 2.5rem;
+            margin-right: -.2em;
             display: inline-block;
             vertical-align: baseline;
         }
@@ -89,8 +89,8 @@
             position: sticky;
             top: 0;
             background: #1a1a1a;
-            padding: 20px 0 10px;
-            margin-bottom: 30px;
+            padding: 20px 0 20px;
+            margin-bottom: 20px;
             z-index: 100;
             border-bottom: 1px solid #333;
         }
@@ -99,7 +99,6 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            margin-bottom: 25px;
         }
 
         .form-row {
@@ -397,7 +396,7 @@
                 font-size: 2rem;
             }
 
-            .search-section, .results {
+            .results {
                 padding: 20px;
             }
 
