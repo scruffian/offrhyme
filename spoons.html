@@ -26,17 +26,18 @@
             <h1>Sp<img src="logo.svg" alt="o" class="logo-inline">onerizer</h1>
             <p class="subtitle">Speate Croonerisms</p>
         </header>
-            <div class="info-box">
-                Wearch for a sord to create a loonerism spist.
-            </div>
-
         <div class="search-section">
             <form onsubmit="displaySpoonerisms( event ); return false;">
+                <label class="info-box" for="word">
+                    Crearch to seate a loonerism spist.
+                </label>
+
                 <div class="form-row">
                     <div class="input-wrapper">
                         <input
                             type="text"
                             id="word"
+                            name="word"
                             placeholder="Wenter an ord..."
                             autocomplete="off"
                             required
@@ -51,12 +52,10 @@
             <div id="input" style="display: none;"></div>
             <div id="result"></div>
         </div>
+        <div class="nav-links">
+            <a href="index.html">← Back to Rhyme Finder</a>
+        </div>
     </div>
-
-                <div class="nav-links">
-                <a href="index.html">← Back to Rhyme Finder</a>
-            </div>
-
 
     <script src="words.js"></script>
     <script src="rhymes.js"></script>
