@@ -185,18 +185,33 @@
             font-weight: 600;
         }
 
-        .result-text {
-            color: #333;
-            font-size: 2rem;
-            font-weight: 600;
-            line-height: 1.3;
+        .spoonerisms-list {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            line-height: 2;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .spoonerism-item {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: baseline;
+        }
+
+        .original-phrase {
+            color: #666;
         }
 
         .arrow {
-            text-align: center;
             color: #667eea;
-            font-size: 1.5rem;
-            margin: 20px 0;
+            margin: 0 20px;
+            flex-shrink: 0;
+        }
+
+        .spoonerism-phrase {
+            color: #333;
+            font-weight: 600;
+            flex: 1;
         }
 
         .empty-state {
@@ -267,6 +282,7 @@
                 padding: 25px;
             }
 
+
             form {
                 flex-direction: column;
             }
@@ -332,15 +348,8 @@
         </div>
 
         <div class="results" id="results-container">
-            <div class="result-row">
-                <div class="result-label">Original</div>
-                <div class="result-text" id="input"></div>
-            </div>
-            <div class="arrow">↓</div>
-            <div class="result-row">
-                <div class="result-label">Spoonerism</div>
-                <div class="result-text" id="result"></div>
-            </div>
+            <div id="input" style="display: none;"></div>
+            <div id="result"></div>
         </div>
     </div>
 
@@ -355,6 +364,25 @@
         const wordRank = {};
         topFifty.forEach((word, index) => {
             wordRank[word] = index;
+        });
+
+        // Create reverse lookup: phonetic -> words (for O(1) lookups instead of O(n) filters)
+        const phoneticToWords = {};
+        Object.keys(words).forEach(word => {
+            const phonetic = words[word];
+            if (!phoneticToWords[phonetic]) {
+                phoneticToWords[phonetic] = [];
+            }
+            phoneticToWords[phonetic].push(word);
+        });
+
+        // Sort each phonetic group by frequency (pre-sorted so we can just take [0])
+        Object.keys(phoneticToWords).forEach(phonetic => {
+            phoneticToWords[phonetic].sort((a, b) => {
+                const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
+                const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
+                return rankA - rankB;
+            });
         });
 
         function removeFirstWordUsingSubString( input ) {
@@ -410,6 +438,7 @@
             }
 
             const allSpoonerisms = [];
+            const seenSpoonerisms = new Set(); // Track unique spoonerisms
             const sounds = Object.keys(rhymeTable);
             let processedCount = 0;
 
@@ -418,17 +447,11 @@
                 if ( soundToUse !== firstLetter && rhymeTable[ soundToUse ].indexOf(rhyme) > -1 && intersect( rhymesWithLetter, rhymeTable[ soundToUse ] ).length > 0 ) {
                     const rhymeToUse = soundToUse + ' ' + rhyme;
 
-                    // Find all words with this phonetic and pick most common
-                    const otherWordCandidates = Object.keys(words).filter( w => {
-                        return words[ w ] === rhymeToUse;
-                    } );
-                    if (otherWordCandidates.length === 0) continue;
+                    // Fast lookup using pre-built index (already sorted by frequency)
+                    const otherWordCandidates = phoneticToWords[rhymeToUse];
+                    if (!otherWordCandidates || otherWordCandidates.length === 0) continue;
 
-                    const otherWord = otherWordCandidates.sort((a, b) => {
-                        const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
-                        const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
-                        return rankA - rankB;
-                    })[0];
+                    const otherWord = otherWordCandidates[0]; // Already sorted, take most common
 
                     const intersectionOfTwoLetters = intersect( rhymesWithLetter, rhymeTable[ soundToUse ] );
                     if (intersectionOfTwoLetters.length === 0) continue;
@@ -440,28 +463,25 @@
                         const phoneticMatch = phoneticRhymes[ intersection ].find( phoneticRhyme => findFirstWordUsingSubString( phoneticRhyme ) === soundToUse );
                         if (!phoneticMatch) continue;
 
-                        const wordMatchCandidates = Object.keys(words).filter( w => {
-                            return words[ w ] === phoneticMatch;
-                        } );
-                        if (wordMatchCandidates.length === 0) continue;
+                        // Fast lookup using pre-built index
+                        const wordMatchCandidates = phoneticToWords[phoneticMatch];
+                        if (!wordMatchCandidates || wordMatchCandidates.length === 0) continue;
 
-                        const wordMatch = wordMatchCandidates.sort((a, b) => {
-                            const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
-                            const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
-                            return rankA - rankB;
-                        })[0];
+                        const wordMatch = wordMatchCandidates[0]; // Already sorted, take most common
 
                         const rhymePairPhonetic = firstLetter + " " + intersection;
-                        const rhymePairCandidates = Object.keys(words).filter( w => {
-                            return words[ w ] === rhymePairPhonetic;
-                        } );
-                        if (rhymePairCandidates.length === 0) continue;
+                        // Fast lookup using pre-built index
+                        const rhymePairCandidates = phoneticToWords[rhymePairPhonetic];
+                        if (!rhymePairCandidates || rhymePairCandidates.length === 0) continue;
 
-                        const rhymePair = rhymePairCandidates.sort((a, b) => {
-                            const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
-                            const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
-                            return rankA - rankB;
-                        })[0];
+                        const rhymePair = rhymePairCandidates[0]; // Already sorted, take most common
+
+                        // Create unique key to detect duplicates
+                        const spoonKey = `${wordMatch}|${otherWord}|${rhymePair}`;
+
+                        // Skip if we've already seen this exact spoonerism
+                        if (seenSpoonerisms.has(spoonKey)) continue;
+                        seenSpoonerisms.add(spoonKey);
 
                         const spoon = { wordMatch, otherWord, rhymePair };
                         allSpoonerisms.push(spoon);
@@ -490,23 +510,14 @@
             return allSpoonerisms;
         }
 
-        function renderSpoonerism(wordToFind, spoon, isFirst) {
-            let html = '';
-            if (!isFirst) {
-                html += '<div style="height: 1px; background: #ddd; margin: 40px 0;"></div>';
-            }
-            html += `
-                <div>
-                    <div style="margin-bottom: 8px;">
-                        <div class="result-text">${wordToFind} ${spoon.wordMatch}</div>
-                    </div>
-                    <div style="text-align: center; color: #667eea; font-size: 1.5rem; margin: 20px 0;">↓</div>
-                    <div>
-                        <div class="result-text">${spoon.otherWord} ${spoon.rhymePair}</div>
-                    </div>
+        function renderSpoonerism(wordToFind, spoon) {
+            return `
+                <div class="spoonerism-item">
+                    <span class="original-phrase">${wordToFind} ${spoon.wordMatch}</span>
+                    <span class="arrow">→</span>
+                    <span class="spoonerism-phrase">${spoon.otherWord} ${spoon.rhymePair}</span>
                 </div>
             `;
-            return html;
         }
 
         async function displaySpoonerisms( event ) {
@@ -542,20 +553,20 @@
 
                     // Update display with new result
                     if (displayedCount === 0) {
-                        resultElement.innerHTML = renderSpoonerism(wordToFind, spoon, true);
-                    } else {
-                        resultElement.innerHTML += renderSpoonerism(wordToFind, spoon, false);
+                        resultElement.innerHTML = '<div class="spoonerisms-list"></div>';
                     }
+                    const listElement = resultElement.querySelector('.spoonerisms-list');
+                    listElement.innerHTML += renderSpoonerism(wordToFind, spoon);
                     displayedCount++;
                 });
 
                 // Re-render with sorted results
                 if (sortedSpoonerisms.length > 0) {
-                    let finalHtml = '';
-                    sortedSpoonerisms.forEach((spoon, index) => {
-                        finalHtml += renderSpoonerism(wordToFind, spoon, index === 0);
+                    let cardsHtml = '';
+                    sortedSpoonerisms.forEach((spoon) => {
+                        cardsHtml += renderSpoonerism(wordToFind, spoon);
                     });
-                    resultElement.innerHTML = finalHtml;
+                    resultElement.innerHTML = `<div class="spoonerisms-list">${cardsHtml}</div>`;
                 } else if (allSpoonerisms.length === 0) {
                     inputElement.innerHTML = '<p class="empty-state">No spoonerism found for this word. Try another!</p>';
                     inputElement.style.display = 'block';
