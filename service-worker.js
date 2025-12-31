@@ -1,4 +1,4 @@
-const CACHE_NAME = "offrhyme-v127";
+const CACHE_NAME = "offrhyme-v132";
 const urlsToCache = [
   "./",
   "./index.html",
@@ -12,7 +12,6 @@ const urlsToCache = [
   "./rhymes.js",
   "./phoneticRhymes.js",
   "./rhyme-table.js",
-  "./top-fifty.js",
   "./wordFrequency.js",
 ];
 

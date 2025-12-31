@@ -102,13 +102,8 @@
     </div>
 
     <script src="words.js"></script>
-    <script src="top-fifty.js"></script>
+    <script src="wordFrequency.js"></script>
     <script>
-        // Create a word rank lookup for fast sorting
-        const wordRank = {};
-        topFifty.forEach((word, index) => {
-            wordRank[word] = index;
-        });
 
         // Extract rhyming part from the last stressed vowel onwards
         function getRhymingPart( phoneticStr ) {
@@ -236,9 +231,9 @@
                 if (a.similarity !== b.similarity) {
                     return b.similarity - a.similarity;
                 }
-                const rankA = wordRank[a.word] !== undefined ? wordRank[a.word] : 999999;
-                const rankB = wordRank[b.word] !== undefined ? wordRank[b.word] : 999999;
-                return rankA - rankB;
+                const freqA = wordFrequency[a.word] || 0;
+                const freqB = wordFrequency[b.word] || 0;
+                return freqB - freqA;
             });
         }
 
@@ -358,26 +353,26 @@
                     if (a.similarity !== b.similarity) {
                         return b.similarity - a.similarity;
                     }
-                    // Secondary sort: frequency (ascending rank = more common first)
-                    const rankA = wordRank[a.word] !== undefined ? wordRank[a.word] : 999999;
-                    const rankB = wordRank[b.word] !== undefined ? wordRank[b.word] : 999999;
-                    return rankA - rankB;
+                    // Secondary sort: frequency (higher frequency = more common first)
+                    const freqA = wordFrequency[a.word] || 0;
+                    const freqB = wordFrequency[b.word] || 0;
+                    return freqB - freqA;
                 });
         }
 
-        function getPopularityClass(rank) {
-            if (rank < 1000) return 'popularity-very-high';
-            if (rank < 5000) return 'popularity-high';
-            if (rank < 15000) return 'popularity-medium';
-            if (rank < 30000) return 'popularity-low';
-            if (rank < 50000) return 'popularity-very-low';
+        function getPopularityClass(frequency) {
+            if (frequency > 100000) return 'popularity-very-high';  // Top ~300 words
+            if (frequency > 10000) return 'popularity-high';         // Top ~4000 words
+            if (frequency > 1000) return 'popularity-medium';        // Top ~15000 words
+            if (frequency > 100) return 'popularity-low';            // Top ~35000 words
+            if (frequency > 10) return 'popularity-very-low';        // Top ~60000+ words
             return 'popularity-rare';
         }
 
         function renderRhymeWords(wordList) {
             return wordList.map(word => {
-                const rank = wordRank[word] !== undefined ? wordRank[word] : 999999;
-                const popularityClass = getPopularityClass(rank);
+                const frequency = wordFrequency[word] || 0;
+                const popularityClass = getPopularityClass(frequency);
                 return `<div class="rhyme-word ${popularityClass}">${word}</div>`;
             }).join('');
         }
@@ -434,17 +429,17 @@
             const wordsHtml = wordList.map(item => {
                 const word = item.word;
                 const similarity = item.similarity;
-                const rank = wordRank[word] !== undefined ? wordRank[word] : 999999;
+                const frequency = wordFrequency[word] || 0;
 
                 // Get heatmap color based on similarity with dynamic range
                 const color = getSimilarityColor(similarity, minSim, maxSim);
 
                 // Opacity based on frequency (more common = more opaque)
                 let opacity;
-                if (rank < 1000) opacity = 1.0;
-                else if (rank < 5000) opacity = 0.85;
-                else if (rank < 15000) opacity = 0.7;
-                else if (rank < 30000) opacity = 0.55;
+                if (frequency > 100000) opacity = 1.0;
+                else if (frequency > 10000) opacity = 0.85;
+                else if (frequency > 1000) opacity = 0.7;
+                else if (frequency > 100) opacity = 0.55;
                 else opacity = 0.4;
 
                 // Use color for border and text, keep background neutral
@@ -497,9 +492,9 @@
 
                     // Sort by frequency
                     const sortedRhymes = filteredRhymes.sort((a, b) => {
-                        const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
-                        const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
-                        return rankA - rankB;
+                        const freqA = wordFrequency[a] || 0;
+                        const freqB = wordFrequency[b] || 0;
+                        return freqB - freqA;
                     });
 
                     return { word: wordToFind, rhymes: sortedRhymes };
@@ -548,9 +543,9 @@
 
             // Sort perfect rhymes by word frequency
             const sortedRhymes = filteredRhymes.sort((a, b) => {
-                const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
-                const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
-                return rankA - rankB;
+                const freqA = wordFrequency[a] || 0;
+                const freqB = wordFrequency[b] || 0;
+                return freqB - freqA;
             });
 
             // Front rhymes and near rhymes are already sorted by similarity
@@ -695,9 +690,9 @@
                 const matches = allWords
                     .filter(word => word.startsWith(value))
                     .sort((a, b) => {
-                        const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
-                        const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
-                        return rankA - rankB;
+                        const freqA = wordFrequency[a] || 0;
+                        const freqB = wordFrequency[b] || 0;
+                        return freqB - freqA;
                     })
                     .slice(0, 10);
 

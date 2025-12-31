@@ -61,15 +61,8 @@
     <script src="rhymes.js"></script>
     <script src="phoneticRhymes.js"></script>
     <script src="rhyme-table.js"></script>
-    <script src="top-fifty.js"></script>
     <script src="wordFrequency.js"></script>
     <script>
-        // Create word rank from topFifty for frequency-based sorting
-        const wordRank = {};
-        topFifty.forEach((word, index) => {
-            wordRank[word] = index;
-        });
-
         // Create reverse lookup: phonetic -> words (for O(1) lookups instead of O(n) filters)
         const phoneticToWords = {};
         Object.keys(words).forEach(word => {
@@ -83,9 +76,9 @@
         // Sort each phonetic group by frequency (pre-sorted so we can just take [0])
         Object.keys(phoneticToWords).forEach(phonetic => {
             phoneticToWords[phonetic].sort((a, b) => {
-                const rankA = wordRank[a] !== undefined ? wordRank[a] : 999999;
-                const rankB = wordRank[b] !== undefined ? wordRank[b] : 999999;
-                return rankA - rankB;
+                const freqA = wordFrequency[a] || 0;
+                const freqB = wordFrequency[b] || 0;
+                return freqB - freqA; // Higher frequency = more common
             });
         });
 
@@ -204,11 +197,11 @@
                 }
             }
 
-            // Sort by combined word frequency (lower rank = more common)
+            // Sort by combined word frequency (higher frequency = more common)
             allSpoonerisms.sort((a, b) => {
-                const scoreA = (wordRank[a.wordMatch] || 999999) + (wordRank[a.otherWord] || 999999) + (wordRank[a.rhymePair] || 999999);
-                const scoreB = (wordRank[b.wordMatch] || 999999) + (wordRank[b.otherWord] || 999999) + (wordRank[b.rhymePair] || 999999);
-                return scoreA - scoreB;
+                const scoreA = (wordFrequency[a.wordMatch] || 0) + (wordFrequency[a.otherWord] || 0) + (wordFrequency[a.rhymePair] || 0);
+                const scoreB = (wordFrequency[b.wordMatch] || 0) + (wordFrequency[b.otherWord] || 0) + (wordFrequency[b.rhymePair] || 0);
+                return scoreB - scoreA; // Higher combined frequency first
             });
 
             return allSpoonerisms;
