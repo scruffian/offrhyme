@@ -1,9 +1,10 @@
-const CACHE_NAME = "offrhyme-v126";
+const CACHE_NAME = "offrhyme-v127";
 const urlsToCache = [
   "./",
   "./index.html",
   "./spoons.html",
   "./styles.css",
+  "./manifest.json",
   "./logo.svg",
   "./icon-192.png",
   "./icon-512.png",
