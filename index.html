@@ -468,17 +468,19 @@
             return wordsHtml;
         }
 
-        function displayRhymes() {
+        function displayRhymes(skipHistoryUpdate = false) {
             const input = document.getElementById('word').value.toLowerCase().trim();
             if (!input) return;
 
             // Scroll to top to show results
             window.scrollTo({ top: 0, behavior: 'smooth' });
 
-            // Update URL with search parameter
-            const url = new URL(window.location);
-            url.searchParams.set('word', input);
-            window.history.pushState({}, '', url);
+            // Update URL with search parameter (unless triggered by back/forward)
+            if (!skipHistoryUpdate) {
+                const url = new URL(window.location);
+                url.searchParams.set('word', input);
+                window.history.pushState({}, '', url);
+            }
 
             // Split input by spaces or commas to detect multiple words
             const words = input.split(/[\s,]+/).filter(w => w.length > 0);
@@ -611,12 +613,15 @@
             const word = urlParams.get('word');
             if (word) {
                 document.getElementById('word').value = word;
-                displayRhymes();
+                displayRhymes(true); // Skip history update to avoid creating new entry
             }
         }
 
         // Load from URL when page loads
         window.addEventListener('load', loadFromURL);
+
+        // Handle back/forward button navigation
+        window.addEventListener('popstate', loadFromURL);
 
         // Autocomplete functionality
         const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
@@ -698,9 +703,9 @@
 
                 showAutocomplete(matches);
 
-                // Wait 300ms after user stops typing to search
+                // Wait 300ms after user stops typing to search (but don't add to history)
                 searchTimeout = setTimeout(() => {
-                    displayRhymes();
+                    displayRhymes(true);
                 }, 300);
             } else {
                 hideAutocomplete();
