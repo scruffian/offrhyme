@@ -45,66 +45,60 @@
                 </div>
                 <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
             </form>
+            <nav class="section-nav" id="section-nav"></nav>
         </div>
 
         <div class="results" id="results-container">
             <div id="result"></div>
         </div>
 
-        <div class="legend">
-            <div class="legend-title">Perfect rhymes: Exact match from last stressed vowel (ending sounds)</div>
-            <div class="legend-items" style="margin-top: 10px;">
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ffffff;"></div>
-                    <span>Very common</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #e0e0e0;"></div>
-                    <span>Common</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #999;"></div>
-                    <span>Medium</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #666;"></div>
-                    <span>Less common</span>
-                </div>
-            </div>
-            <div class="legend-title" style="margin-top: 15px;">Compound rhymes: Match on secondary stress (e.g., "lime" with "daytime", "showtime")</div>
-            <div class="legend-title" style="margin-top: 15px;">Front rhymes & Near rhymes: Color = overall similarity, Opacity = frequency</div>
-            <div class="legend-items">
-                <div class="legend-item">
-                    <div class="legend-color" style="background: rgb(0, 200, 150);"></div>
-                    <span>Best match</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: rgb(0, 160, 200);"></div>
-                    <span>↓</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: rgb(0, 100, 240);"></div>
-                    <span>↓</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: rgb(100, 50, 230);"></div>
-                    <span>↓</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: rgb(180, 0, 200);"></div>
-                    <span>Worst match</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="nav-links" style="text-align: center; margin-top: 40px;">
+        <div class="nav-links" style="text-align: center; margin-top: 80px;">
+            <button type="button" class="how-it-works-toggle" id="how-it-works-toggle" aria-expanded="false" aria-controls="legend">How it works</button>
             <a href="spoons.html">Spoonerizer</a>
         </div>
+
+        <div class="legend" id="legend" hidden>
+            <div class="legend-items" style="flex-direction: column; gap: 8px;">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: rgba(80, 220, 140, 0.7); border: 1px solid rgba(80, 220, 140, 0.85);"></div>
+                    <span><strong>Perfect rhymes</strong> — exact match from last stressed vowel</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: rgba(255, 180, 90, 0.7); border: 1px solid rgba(255, 180, 90, 0.85);"></div>
+                    <span><strong>Compound rhymes</strong> — match on secondary stress (e.g. "lime" with "daytime")</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: rgba(230, 110, 180, 0.7); border: 1px solid rgba(230, 110, 180, 0.85);"></div>
+                    <span><strong>Slant rhymes</strong> — same final consonants with a short vowel</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: rgba(100, 170, 240, 0.7); border: 1px solid rgba(100, 170, 240, 0.85);"></div>
+                    <span><strong>Front rhymes</strong> — match on the start of the word</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: rgba(180, 130, 240, 0.7); border: 1px solid rgba(180, 130, 240, 0.85);"></div>
+                    <span><strong>Near rhymes</strong> — similar but inexact phoneme pattern</span>
+                </div>
+            </div>
+            <div class="legend-title" style="margin-top: 15px;">Fill intensity = word commonness (perfect / compound / slant) or match quality (front / near).</div>
+        </div>
+
+        <footer class="site-footer">
+            a <a href="https://scruffian.com" target="_blank" rel="noopener">scruffian</a> project
+        </footer>
     </div>
 
     <script src="words.js"></script>
     <script src="wordFrequency.js"></script>
     <script>
+
+        // Normalize unstressed vowels (CMU stress marker 0) to a single schwa symbol.
+        // Why: CMU dict inconsistently transcribes the unstressed final vowel in words
+        // like "darkness" (AH0) vs "starkness" (IH0), which sound identical. Collapsing
+        // them lets the rhyme key match across these inconsistencies.
+        function normalizeUnstressed( phonemes ) {
+            return phonemes.map( ph => ph.endsWith( '0' ) ? '@' : ph );
+        }
 
         // Extract rhyming part from the last stressed vowel onwards
         function getRhymingPart( phoneticStr ) {
@@ -122,11 +116,11 @@
 
             // If no primary stress found, fall back to old behavior
             if (lastStressedIndex === -1) {
-                return phoneticStr.substring(phoneticStr.indexOf(" ") + 1, phoneticStr.length);
+                return normalizeUnstressed( phonemes.slice(1) ).join(' ');
             }
 
-            // Return everything from the last stressed vowel onwards
-            return phonemes.slice(lastStressedIndex).join(' ');
+            // Return everything from the last stressed vowel onwards, normalized
+            return normalizeUnstressed( phonemes.slice(lastStressedIndex) ).join(' ');
         }
 
         // Extract rhyming part from the last secondary stressed vowel onwards (for compound words)
@@ -148,8 +142,8 @@
                 return '';
             }
 
-            // Return everything from the last secondary stressed vowel onwards
-            return phonemes.slice(lastSecondaryStressedIndex).join(' ');
+            // Return everything from the last secondary stressed vowel onwards, normalized
+            return normalizeUnstressed( phonemes.slice(lastSecondaryStressedIndex) ).join(' ');
         }
 
         // Extract front rhyming part from beginning to first stressed vowel
@@ -175,9 +169,35 @@
             return phonemes.slice(0, firstStressedIndex + 1).join(' ');
         }
 
+        // Short/lax vowels — these are the ones that can slant-rhyme with each other
+        // when they appear before the same final consonants (e.g. -ness vs guess).
+        const SHORT_VOWELS = new Set( [ 'AH', 'IH', 'EH', 'AE', 'UH', 'AA' ] );
+
+        // Signature describing the final syllable for slant-rhyme matching:
+        // "<short-vowel-class> <consonants after the last vowel>". Returns null for
+        // words whose last vowel is long/a diphthong, or which end on a vowel.
+        function getSlantSignature( phoneticStr ) {
+            if ( ! phoneticStr ) return null;
+            const phonemes = phoneticStr.split( ' ' );
+            let lastVowelIdx = -1;
+            for ( let i = phonemes.length - 1; i >= 0; i-- ) {
+                if ( /[012]$/.test( phonemes[ i ] ) ) {
+                    lastVowelIdx = i;
+                    break;
+                }
+            }
+            if ( lastVowelIdx === -1 ) return null;
+            const vowel = phonemes[ lastVowelIdx ].replace( /[012]/g, '' );
+            if ( ! SHORT_VOWELS.has( vowel ) ) return null;
+            const after = phonemes.slice( lastVowelIdx + 1 );
+            if ( after.length === 0 ) return null;
+            return 'SHORT ' + after.join( ' ' );
+        }
+
         const rhymes = {};
         const compoundRhymes = {};
         const frontRhymes = {};
+        const slantRhymes = {};
         Object.keys( words ).forEach( word => {
             // Perfect rhymes (back)
             const rhymingPart = getRhymingPart( words[ word ] );
@@ -201,6 +221,15 @@
                 frontRhymes[ frontRhymingPart ] = [];
             }
             frontRhymes[ frontRhymingPart ].push( word );
+
+            // Slant rhymes (short vowel + matching final consonants)
+            const slantSig = getSlantSignature( words[ word ] );
+            if ( slantSig ) {
+                if ( ! slantRhymes[ slantSig ] ) {
+                    slantRhymes[ slantSig ] = [];
+                }
+                slantRhymes[ slantSig ].push( word );
+            }
         } );
 
         function getRhymes( word ) {
@@ -224,6 +253,14 @@
 
             // Filter out the search word itself
             return compoundRhymesList.filter(w => w !== word && !/\(\d+\)$/.test(w));
+        }
+
+        function getSlantRhymes( word ) {
+            const sig = getSlantSignature( words[ word ] );
+            if ( ! sig ) return [];
+            return ( slantRhymes[ sig ] || [] ).filter(
+                w => w !== word && ! /\(\d+\)$/.test( w )
+            );
         }
 
         function getFrontRhymes( word ) {
@@ -412,92 +449,57 @@
                 });
         }
 
-        function getPopularityClass(frequency) {
-            if (frequency > 100000) return 'popularity-very-high';  // Top ~300 words
-            if (frequency > 10000) return 'popularity-high';         // Top ~4000 words
-            if (frequency > 1000) return 'popularity-medium';        // Top ~15000 words
-            if (frequency > 100) return 'popularity-low';            // Top ~35000 words
-            if (frequency > 10) return 'popularity-very-low';        // Top ~60000+ words
-            return 'popularity-rare';
+        // Distinct hue per rhyme section. Fill intensity carries the section's variable
+        // (frequency for perfect/compound/slant, similarity for front/near); the hue
+        // just identifies which section a pill belongs to.
+        const SECTION_HUE = {
+            perfect:  { r:  80, g: 220, b: 140 },  // green
+            compound: { r: 255, g: 180, b:  90 },  // amber
+            slant:    { r: 230, g: 110, b: 180 },  // pink
+            front:    { r: 100, g: 170, b: 240 },  // sky blue
+            near:     { r: 180, g: 130, b: 240 },  // purple
+        };
+
+        function pillStyle(rgb, t) {
+            const bgAlpha = t * 0.85;
+            const borderAlpha = 0.35 + t * 0.55;
+            return `background: rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${bgAlpha}); ` +
+                   `color: #ffffff; ` +
+                   `border-color: rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${borderAlpha});`;
         }
 
-        function renderRhymeWords(wordList) {
-            return wordList.map(word => {
-                const frequency = wordFrequency[word] || 0;
-                const popularityClass = getPopularityClass(frequency);
-                return `<div class="rhyme-word ${popularityClass}">${word}</div>`;
+        function renderRhymeWords(wordList, rgb) {
+            if (wordList.length === 0) return '';
+
+            // Frequency varies across orders of magnitude — normalize log-scaled across
+            // the current list so the most common word maps to t=1 and the rarest to t=0.
+            const logFreqs = wordList.map(w => Math.log10((wordFrequency[w] || 0) + 1));
+            const minF = Math.min(...logFreqs);
+            const maxF = Math.max(...logFreqs);
+            const range = maxF - minF;
+
+            return wordList.map((word, i) => {
+                const t = range > 0 ? (logFreqs[i] - minF) / range : 1;
+                const href = `?word=${encodeURIComponent(word)}`;
+                return `<a href="${href}" class="rhyme-word" style="${pillStyle(rgb, t)}">${word}</a>`;
             }).join('');
         }
 
-        function getSimilarityColor(similarity, minSim, maxSim) {
-            // Smooth continuous gradient: green → teal → cyan → blue → indigo → purple
-            // Each score gets a unique color
-
-            // Normalize similarity to 0-1 range based on actual min/max
-            const range = maxSim - minSim;
-            const t = range > 0 ? (similarity - minSim) / range : 1;
-
-            // Define 5 color stops for smooth interpolation
-            const colorStops = [
-                { pos: 1.0, r: 0, g: 200, b: 150 },     // Teal (best near rhyme)
-                { pos: 0.75, r: 0, g: 160, b: 200 },    // Cyan
-                { pos: 0.5, r: 0, g: 100, b: 240 },     // Blue
-                { pos: 0.25, r: 100, g: 50, b: 230 },   // Indigo
-                { pos: 0.0, r: 180, g: 0, b: 200 }      // Purple (worst)
-            ];
-
-            // Find the two color stops to interpolate between
-            let lowerStop = colorStops[colorStops.length - 1];
-            let upperStop = colorStops[0];
-
-            for (let i = 0; i < colorStops.length - 1; i++) {
-                if (t >= colorStops[i + 1].pos && t <= colorStops[i].pos) {
-                    upperStop = colorStops[i];
-                    lowerStop = colorStops[i + 1];
-                    break;
-                }
-            }
-
-            // Interpolate between the two stops
-            const segmentRange = upperStop.pos - lowerStop.pos;
-            const localT = segmentRange > 0 ? (t - lowerStop.pos) / segmentRange : 0;
-
-            return {
-                r: Math.floor(lowerStop.r + (upperStop.r - lowerStop.r) * localT),
-                g: Math.floor(lowerStop.g + (upperStop.g - lowerStop.g) * localT),
-                b: Math.floor(lowerStop.b + (upperStop.b - lowerStop.b) * localT)
-            };
-        }
-
-        function renderNearRhymeWords(wordList) {
+        function renderNearRhymeWords(wordList, rgb) {
             if (wordList.length === 0) return '';
 
-            // Calculate min and max similarity for dynamic color scaling
+            // Normalize similarity to 0-1 across the current list so the best match
+            // reads as "best" regardless of absolute score.
             const similarities = wordList.map(item => item.similarity);
             const minSim = Math.min(...similarities);
             const maxSim = Math.max(...similarities);
+            const range = maxSim - minSim;
 
-            // Render all words in a single container (no grouping by similarity)
-            const wordsHtml = wordList.map(item => {
+            return wordList.map(item => {
                 const word = item.word;
                 const similarity = item.similarity;
-                const frequency = wordFrequency[word] || 0;
+                const t = range > 0 ? (similarity - minSim) / range : 1;
 
-                // Get heatmap color based on similarity with dynamic range
-                const color = getSimilarityColor(similarity, minSim, maxSim);
-
-                // Opacity based on frequency (more common = more opaque)
-                let opacity;
-                if (frequency > 100000) opacity = 1.0;
-                else if (frequency > 10000) opacity = 0.85;
-                else if (frequency > 1000) opacity = 0.7;
-                else if (frequency > 100) opacity = 0.55;
-                else opacity = 0.4;
-
-                // Use color for border and text, keep background neutral
-                const colorRgba = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
-
-                // Determine level name
                 let levelName;
                 if (similarity >= 32) levelName = 'excellent';
                 else if (similarity >= 24) levelName = 'very good';
@@ -507,12 +509,10 @@
                 else if (similarity >= 4) levelName = 'weak';
                 else levelName = 'poor';
 
-                const title = `${levelName} (similarity: ${similarity}, range: ${minSim}-${maxSim})`;
-
-                return `<div class="rhyme-word" style="background: transparent; color: ${colorRgba}; border-color: ${colorRgba};" title="${title}">${word}</div>`;
+                const title = `${levelName} (similarity: ${similarity})`;
+                const href = `?word=${encodeURIComponent(word)}`;
+                return `<a href="${href}" class="rhyme-word" style="${pillStyle(rgb, t)}" title="${title}">${word}</a>`;
             }).join('');
-
-            return wordsHtml;
         }
 
         function displayRhymes(skipHistoryUpdate = false) {
@@ -559,7 +559,7 @@
                         <div class="rhyme-section">
                             <h3>Perfect Rhymes for "${word}"</h3>
                             <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                ${rhymes.length > 0 ? renderRhymeWords(rhymes) : '<p class="empty-state">No rhymes found</p>'}
+                                ${rhymes.length > 0 ? renderRhymeWords(rhymes, SECTION_HUE.perfect) : '<p class="empty-state">No rhymes found</p>'}
                             </div>
                         </div>
                     `;
@@ -568,15 +568,18 @@
                 html += '</div>';
                 resultElement.innerHTML = html;
                 resultsContainer.classList.add('show');
+                document.getElementById('section-nav').innerHTML = '';
+                document.getElementById('section-nav').classList.remove('show');
                 return;
             }
 
-            // Single word mode: show perfect, compound, near, and front rhymes
+            // Single word mode: show perfect, compound, slant, near, and front rhymes
             const wordToFind = words[0];
             const rhymesList = getRhymes( wordToFind );
             const compoundRhymesList = getCompoundRhymes( wordToFind );
             const frontRhymesList = getFrontRhymes( wordToFind );
             const nearRhymesList = getNearRhymes( wordToFind );
+            const slantRhymesList = getSlantRhymes( wordToFind );
 
             // Filter out the search word itself and alternate pronunciations (e.g., "word(2)")
             const filteredRhymes = rhymesList
@@ -592,9 +595,10 @@
 
             // Create a Set of compound rhyme words for efficient filtering
             const compoundRhymesSet = new Set(sortedCompoundRhymes);
+            const perfectRhymesSet = new Set(filteredRhymes);
 
-            // Front rhymes and near rhymes are now objects with word and similarity
-            // Filter out compound rhymes from these sections
+            // Front rhymes and near rhymes are objects with word and similarity.
+            // Filter out compound rhymes from these sections.
             const filteredFrontRhymes = frontRhymesList.filter(item =>
                 item.word !== wordToFind &&
                 !/\(\d+\)$/.test(item.word) &&
@@ -607,6 +611,24 @@
                 !compoundRhymesSet.has(item.word)
             );
 
+            // Slant rhymes are the loosest match (any short vowel + same final consonants),
+            // so they have the lowest priority — exclude anything already shown in a more
+            // specific section.
+            const alreadyShown = new Set([
+                ...perfectRhymesSet,
+                ...compoundRhymesSet,
+                ...filteredFrontRhymes.map(item => item.word),
+                ...filteredNearRhymes.map(item => item.word),
+            ]);
+            const filteredSlantRhymes = slantRhymesList
+                .filter(w => !alreadyShown.has(w))
+                .sort((a, b) => {
+                    const freqA = wordFrequency[a] || 0;
+                    const freqB = wordFrequency[b] || 0;
+                    return freqB - freqA;
+                })
+                .slice(0, 100);
+
             // Sort perfect rhymes by word frequency
             const sortedRhymes = filteredRhymes.sort((a, b) => {
                 const freqA = wordFrequency[a] || 0;
@@ -618,67 +640,127 @@
             const sortedFrontRhymes = filteredFrontRhymes;
             const sortedNearRhymes = filteredNearRhymes;
 
-            let html = '';
+            const navSections = [];
+            const sectionsHtml = [];
 
-            // Always show perfect rhymes section
-            html += `
-                <div class="rhyme-section">
+            navSections.push({ id: 'section-perfect', label: 'Perfect' });
+            sectionsHtml.push(`
+                <div class="rhyme-section" id="section-perfect">
                     <h3>Perfect Rhymes</h3>
                     <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        ${sortedRhymes.length > 0 ? renderRhymeWords(sortedRhymes) : '<p class="empty-state">No perfect rhymes found</p>'}
+                        ${sortedRhymes.length > 0 ? renderRhymeWords(sortedRhymes, SECTION_HUE.perfect) : '<p class="empty-state">No perfect rhymes found</p>'}
                     </div>
                 </div>
-            `;
+            `);
 
-            // Show compound rhymes section if there are any
             if (sortedCompoundRhymes.length > 0) {
-                html += `
-                    <div class="rhyme-section">
+                navSections.push({ id: 'section-compound', label: 'Compound' });
+                sectionsHtml.push(`
+                    <div class="rhyme-section" id="section-compound">
                         <h3>Compound Rhymes</h3>
                         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            ${renderRhymeWords(sortedCompoundRhymes)}
+                            ${renderRhymeWords(sortedCompoundRhymes, SECTION_HUE.compound)}
                         </div>
                     </div>
-                `;
+                `);
             }
 
-            // Two-column layout for front rhymes and near rhymes
-            if (sortedFrontRhymes.length > 0 || sortedNearRhymes.length > 0) {
-                if (html) html += '<div class="section-divider"></div>';
-                html += '<div class="two-column-container">';
-
-                if (sortedFrontRhymes.length > 0) {
-                    html += `
-                        <div class="rhyme-section front-rhymes-section">
-                            <h3>Front Rhymes</h3>
-                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                ${renderNearRhymeWords(sortedFrontRhymes)}
-                            </div>
+            if (filteredSlantRhymes.length > 0) {
+                navSections.push({ id: 'section-slant', label: 'Slant' });
+                sectionsHtml.push(`
+                    <div class="rhyme-section" id="section-slant">
+                        <h3>Slant Rhymes</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${renderRhymeWords(filteredSlantRhymes, SECTION_HUE.slant)}
                         </div>
-                    `;
-                } else {
-                    html += '<div class="front-rhymes-section"></div>'; // Empty column
-                }
+                    </div>
+                `);
+            }
 
-                if (sortedNearRhymes.length > 0) {
-                    html += `
-                        <div class="rhyme-section near-rhymes-section">
-                            <h3>Near Rhymes</h3>
-                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                ${renderNearRhymeWords(sortedNearRhymes)}
-                            </div>
+            if (sortedFrontRhymes.length > 0) {
+                navSections.push({ id: 'section-front', label: 'Front' });
+                sectionsHtml.push(`
+                    <div class="rhyme-section" id="section-front">
+                        <h3>Front Rhymes</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${renderNearRhymeWords(sortedFrontRhymes, SECTION_HUE.front)}
                         </div>
-                    `;
-                } else {
-                    html += '<div></div>'; // Empty column
-                }
+                    </div>
+                `);
+            }
 
-                html += '</div>';
+            if (sortedNearRhymes.length > 0) {
+                navSections.push({ id: 'section-near', label: 'Near' });
+                sectionsHtml.push(`
+                    <div class="rhyme-section" id="section-near">
+                        <h3>Near Rhymes</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${renderNearRhymeWords(sortedNearRhymes, SECTION_HUE.near)}
+                        </div>
+                    </div>
+                `);
+            }
+
+            let html = sectionsHtml.join('');
+
+            // Populate the sticky section nav (lives inside .search-section so it
+            // stays in view alongside the search bar).
+            const sectionNav = document.getElementById('section-nav');
+            if (navSections.length > 1) {
+                sectionNav.innerHTML = navSections
+                    .map(s => {
+                        const rgb = SECTION_HUE[s.id.replace('section-', '')];
+                        const style = rgb
+                            ? `background: rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2); border-color: rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.6);`
+                            : '';
+                        return `<a href="#${s.id}" class="section-nav-link" style="${style}">${s.label}</a>`;
+                    })
+                    .join('');
+                sectionNav.classList.add('show');
+            } else {
+                sectionNav.innerHTML = '';
+                sectionNav.classList.remove('show');
             }
 
             resultElement.innerHTML = html;
             resultsContainer.classList.add('show');
         }
+
+        // Clicking a rhyme word updates the search to that word.
+        // "How it works" toggle reveals the legend.
+        const howItWorksToggle = document.getElementById('how-it-works-toggle');
+        const legendEl = document.getElementById('legend');
+        howItWorksToggle.addEventListener('click', () => {
+            const expanded = howItWorksToggle.getAttribute('aria-expanded') === 'true';
+            howItWorksToggle.setAttribute('aria-expanded', String(!expanded));
+            legendEl.hidden = expanded;
+            howItWorksToggle.textContent = expanded ? 'How it works' : 'Hide';
+        });
+
+        document.getElementById('result').addEventListener('click', (e) => {
+            const link = e.target.closest('.rhyme-word');
+            if (!link) return;
+            // Allow modifier-clicks / middle-click to open in new tab
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            document.getElementById('word').value = link.textContent;
+            hideAutocomplete();
+            displayRhymes();
+        });
+
+        // Clicking a section-nav link smooth-scrolls to that section, offset by
+        // the sticky search-section's height so the heading lands beneath it.
+        document.getElementById('section-nav').addEventListener('click', (e) => {
+            const navLink = e.target.closest('.section-nav-link');
+            if (!navLink) return;
+            e.preventDefault();
+            const target = document.querySelector(navLink.getAttribute('href'));
+            if (!target) return;
+            const searchSection = document.querySelector('.search-section');
+            const offset = searchSection ? searchSection.getBoundingClientRect().height : 0;
+            const top = target.getBoundingClientRect().top + window.scrollY - offset - 8;
+            window.scrollTo({ top, behavior: 'smooth' });
+        });
 
         // Load rhyme from URL parameter on page load
         function loadFromURL() {
