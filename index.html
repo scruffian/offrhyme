@@ -69,7 +69,7 @@
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: rgba(230, 110, 180, 0.7); border: 1px solid rgba(230, 110, 180, 0.85);"></div>
-                    <span><strong>Slant rhymes</strong> — same final consonants with a short vowel</span>
+                    <span><strong>Slant rhymes</strong> — same short vowel with matching or similar final consonants</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: rgba(100, 170, 240, 0.7); border: 1px solid rgba(100, 170, 240, 0.85);"></div>
@@ -170,12 +170,35 @@
         }
 
         // Short/lax vowels — these are the ones that can slant-rhyme with each other
-        // when they appear before the same final consonants (e.g. -ness vs guess).
+        // when they appear before the same or similar final consonants (e.g. -ness vs guess).
         const SHORT_VOWELS = new Set( [ 'AH', 'IH', 'EH', 'AE', 'UH', 'AA' ] );
 
+        const SLANT_CODA_CLASSES = {
+            F: 'VOICELESS_FRICATIVE',
+            S: 'VOICELESS_FRICATIVE',
+            SH: 'VOICELESS_FRICATIVE',
+            TH: 'VOICELESS_FRICATIVE',
+        };
+
+        function normalizeSlantCoda( phoneme ) {
+            return SLANT_CODA_CLASSES[ phoneme ] || phoneme;
+        }
+
+        function getSlantVowel( phoneticStr ) {
+            if ( ! phoneticStr ) return '';
+            const phonemes = phoneticStr.split( ' ' );
+            for ( let i = phonemes.length - 1; i >= 0; i-- ) {
+                if ( /[012]$/.test( phonemes[ i ] ) ) {
+                    const vowel = phonemes[ i ].replace( /[012]/g, '' );
+                    return SHORT_VOWELS.has( vowel ) ? vowel : '';
+                }
+            }
+            return '';
+        }
+
         // Signature describing the final syllable for slant-rhyme matching:
-        // "<short-vowel-class> <consonants after the last vowel>". Returns null for
-        // words whose last vowel is long/a diphthong, or which end on a vowel.
+        // "<short-vowel-class> <consonants/classes after the last vowel>". Returns
+        // null for words whose last vowel is long/a diphthong, or which end on a vowel.
         function getSlantSignature( phoneticStr ) {
             if ( ! phoneticStr ) return null;
             const phonemes = phoneticStr.split( ' ' );
@@ -191,7 +214,30 @@
             if ( ! SHORT_VOWELS.has( vowel ) ) return null;
             const after = phonemes.slice( lastVowelIdx + 1 );
             if ( after.length === 0 ) return null;
-            return 'SHORT ' + after.join( ' ' );
+            return 'SHORT ' + after.map( normalizeSlantCoda ).join( ' ' );
+        }
+
+        function compareSlantRhymes( searchWord, a, b ) {
+            const searchVowel = getSlantVowel( words[ searchWord ] );
+            const aMatchesVowel = getSlantVowel( words[ a ] ) === searchVowel;
+            const bMatchesVowel = getSlantVowel( words[ b ] ) === searchVowel;
+            if ( aMatchesVowel !== bMatchesVowel ) {
+                return aMatchesVowel ? -1 : 1;
+            }
+
+            const freqA = wordFrequency[ a ] || 0;
+            const freqB = wordFrequency[ b ] || 0;
+            if ( freqA !== freqB ) {
+                return freqB - freqA;
+            }
+
+            const aSimilarity = calculateSimilarity( words[ searchWord ], words[ a ] );
+            const bSimilarity = calculateSimilarity( words[ searchWord ], words[ b ] );
+            if ( aSimilarity !== bSimilarity ) {
+                return bSimilarity - aSimilarity;
+            }
+
+            return a.localeCompare( b );
         }
 
         const rhymes = {};
@@ -222,7 +268,7 @@
             }
             frontRhymes[ frontRhymingPart ].push( word );
 
-            // Slant rhymes (short vowel + matching final consonants)
+            // Slant rhymes (short vowel + matching or similar final consonants)
             const slantSig = getSlantSignature( words[ word ] );
             if ( slantSig ) {
                 if ( ! slantRhymes[ slantSig ] ) {
@@ -611,7 +657,7 @@
                 !compoundRhymesSet.has(item.word)
             );
 
-            // Slant rhymes are the loosest match (any short vowel + same final consonants),
+            // Slant rhymes are the loosest match (any short vowel + matching/similar final consonants),
             // so they have the lowest priority — exclude anything already shown in a more
             // specific section.
             const alreadyShown = new Set([
@@ -622,11 +668,7 @@
             ]);
             const filteredSlantRhymes = slantRhymesList
                 .filter(w => !alreadyShown.has(w))
-                .sort((a, b) => {
-                    const freqA = wordFrequency[a] || 0;
-                    const freqB = wordFrequency[b] || 0;
-                    return freqB - freqA;
-                })
+                .sort((a, b) => compareSlantRhymes( wordToFind, a, b ))
                 .slice(0, 100);
 
             // Sort perfect rhymes by word frequency
