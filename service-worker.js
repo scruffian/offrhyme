@@ -1,4 +1,4 @@
-const CACHE_NAME = "offrhyme-v132";
+const CACHE_NAME = "offrhyme-v133";
 const urlsToCache = [
   "./",
   "./index.html",
