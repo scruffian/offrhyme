@@ -175,6 +175,8 @@
 
         const SLANT_CODA_CLASSES = {
             F: 'VOICELESS_FRICATIVE',
+            M: 'NASAL',
+            N: 'NASAL',
             S: 'VOICELESS_FRICATIVE',
             SH: 'VOICELESS_FRICATIVE',
             TH: 'VOICELESS_FRICATIVE',
@@ -196,9 +198,10 @@
             return '';
         }
 
-        // Signature describing the final syllable for slant-rhyme matching:
-        // "<short-vowel-class> <consonants/classes after the last vowel>". Returns
-        // null for words whose last vowel is long/a diphthong, or which end on a vowel.
+        // Signature describing the final coda for slant-rhyme matching. Use the last
+        // two consonants so added lead-in consonants still match ("best" / "next"),
+        // and class single consonants where English commonly slants them ("swim" / "skin").
+        // Returns null for words whose last vowel is long/a diphthong, or which end on a vowel.
         function getSlantSignature( phoneticStr ) {
             if ( ! phoneticStr ) return null;
             const phonemes = phoneticStr.split( ' ' );
@@ -214,7 +217,8 @@
             if ( ! SHORT_VOWELS.has( vowel ) ) return null;
             const after = phonemes.slice( lastVowelIdx + 1 );
             if ( after.length === 0 ) return null;
-            return 'SHORT ' + after.map( normalizeSlantCoda ).join( ' ' );
+            const coda = after.slice( -2 ).map( normalizeSlantCoda );
+            return 'SHORT ' + coda.join( ' ' );
         }
 
         function compareSlantRhymes( searchWord, a, b ) {
@@ -651,25 +655,23 @@
                 !compoundRhymesSet.has(item.word)
             );
 
-            const filteredNearRhymes = nearRhymesList.filter(item =>
-                item.word !== wordToFind &&
-                !/\(\d+\)$/.test(item.word) &&
-                !compoundRhymesSet.has(item.word)
-            );
-
-            // Slant rhymes are the loosest match (any short vowel + matching/similar final consonants),
-            // so they have the lowest priority — exclude anything already shown in a more
-            // specific section.
-            const alreadyShown = new Set([
+            const shownBeforeSlant = new Set([
                 ...perfectRhymesSet,
                 ...compoundRhymesSet,
                 ...filteredFrontRhymes.map(item => item.word),
-                ...filteredNearRhymes.map(item => item.word),
             ]);
             const filteredSlantRhymes = slantRhymesList
-                .filter(w => !alreadyShown.has(w))
+                .filter(w => !shownBeforeSlant.has(w))
                 .sort((a, b) => compareSlantRhymes( wordToFind, a, b ))
                 .slice(0, 100);
+
+            const slantRhymesSet = new Set(filteredSlantRhymes);
+            const filteredNearRhymes = nearRhymesList.filter(item =>
+                item.word !== wordToFind &&
+                !/\(\d+\)$/.test(item.word) &&
+                !compoundRhymesSet.has(item.word) &&
+                !slantRhymesSet.has(item.word)
+            );
 
             // Sort perfect rhymes by word frequency
             const sortedRhymes = filteredRhymes.sort((a, b) => {
