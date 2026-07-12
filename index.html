@@ -518,18 +518,16 @@
                    `border-color: rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${borderAlpha});`;
         }
 
+        function frequencyIntensity( frequency ) {
+            if ( frequency <= 0 ) return 0.1;
+            const commonWordFrequency = 30000;
+            return Math.min( 1, Math.log10( frequency + 1 ) / Math.log10( commonWordFrequency + 1 ) );
+        }
+
         function renderRhymeWords(wordList, rgb) {
             if (wordList.length === 0) return '';
-
-            // Frequency varies across orders of magnitude — normalize log-scaled across
-            // the current list so the most common word maps to t=1 and the rarest to t=0.
-            const logFreqs = wordList.map(w => Math.log10((wordFrequency[w] || 0) + 1));
-            const minF = Math.min(...logFreqs);
-            const maxF = Math.max(...logFreqs);
-            const range = maxF - minF;
-
-            return wordList.map((word, i) => {
-                const t = range > 0 ? (logFreqs[i] - minF) / range : 1;
+            return wordList.map(word => {
+                const t = frequencyIntensity( wordFrequency[word] || 0 );
                 const href = `?word=${encodeURIComponent(word)}`;
                 return `<a href="${href}" class="rhyme-word" style="${pillStyle(rgb, t)}">${word}</a>`;
             }).join('');
