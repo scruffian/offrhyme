@@ -175,9 +175,10 @@
         const SHORT_VOWELS = new Set( [ 'AH', 'IH', 'EH', 'AE', 'UH', 'AA' ] );
 
         const SLANT_CODA_CLASSES = {
-            F: 'VOICELESS_FRICATIVE',
+            F: 'VOICELESS_LABIAL',
             M: 'NASAL',
             N: 'NASAL',
+            P: 'VOICELESS_LABIAL',
             S: 'VOICELESS_FRICATIVE',
             SH: 'VOICELESS_FRICATIVE',
             TH: 'VOICELESS_FRICATIVE',
@@ -191,7 +192,7 @@
             if ( ! phoneticStr ) return '';
             const phonemes = phoneticStr.split( ' ' );
             for ( let i = phonemes.length - 1; i >= 0; i-- ) {
-                if ( /[012]$/.test( phonemes[ i ] ) ) {
+                if ( /1$/.test( phonemes[ i ] ) ) {
                     const vowel = phonemes[ i ].replace( /[012]/g, '' );
                     return SHORT_VOWELS.has( vowel ) ? vowel : '';
                 }
@@ -199,27 +200,31 @@
             return '';
         }
 
-        // Signature describing the final coda for slant-rhyme matching. Use the last
-        // two consonants so added lead-in consonants still match ("best" / "next"),
-        // and class single consonants where English commonly slants them ("swim" / "skin").
-        // Returns null for words whose last vowel is long/a diphthong, or which end on a vowel.
+        // Signature describing the stressed short vowel and final consonant tail for
+        // slant-rhyme matching. Use the last two post-stress consonants so added
+        // lead-in consonants still match ("best" / "next"), while weak syllables can
+        // still slant on the stressed vowel's consonant frame ("simple" / "sinful").
+        // Returns null for words whose stressed vowel is long/a diphthong, or which
+        // have no consonants after that stressed vowel.
         function getSlantSignature( phoneticStr ) {
             if ( ! phoneticStr ) return null;
             const phonemes = phoneticStr.split( ' ' );
-            let lastVowelIdx = -1;
+            let lastStressedIdx = -1;
             for ( let i = phonemes.length - 1; i >= 0; i-- ) {
-                if ( /[012]$/.test( phonemes[ i ] ) ) {
-                    lastVowelIdx = i;
+                if ( /1$/.test( phonemes[ i ] ) ) {
+                    lastStressedIdx = i;
                     break;
                 }
             }
-            if ( lastVowelIdx === -1 ) return null;
-            const vowel = phonemes[ lastVowelIdx ].replace( /[012]/g, '' );
+            if ( lastStressedIdx === -1 ) return null;
+            const vowel = phonemes[ lastStressedIdx ].replace( /[012]/g, '' );
             if ( ! SHORT_VOWELS.has( vowel ) ) return null;
-            const after = phonemes.slice( lastVowelIdx + 1 );
+            const after = phonemes
+                .slice( lastStressedIdx + 1 )
+                .filter( phoneme => ! /[012]$/.test( phoneme ) );
             if ( after.length === 0 ) return null;
             const coda = after.slice( -2 ).map( normalizeSlantCoda );
-            return 'SHORT ' + coda.join( ' ' );
+            return vowel + ' ' + coda.join( ' ' );
         }
 
         function compareSlantRhymes( searchWord, a, b ) {
@@ -646,18 +651,9 @@
             const compoundRhymesSet = new Set(sortedCompoundRhymes);
             const perfectRhymesSet = new Set(filteredRhymes);
 
-            // Front rhymes and near rhymes are objects with word and similarity.
-            // Filter out compound rhymes from these sections.
-            const filteredFrontRhymes = frontRhymesList.filter(item =>
-                item.word !== wordToFind &&
-                !/\(\d+\)$/.test(item.word) &&
-                !compoundRhymesSet.has(item.word)
-            );
-
             const shownBeforeSlant = new Set([
                 ...perfectRhymesSet,
                 ...compoundRhymesSet,
-                ...filteredFrontRhymes.map(item => item.word),
             ]);
             const filteredSlantRhymes = slantRhymesList
                 .filter(w => !shownBeforeSlant.has(w))
@@ -665,6 +661,16 @@
                 .slice(0, 100);
 
             const slantRhymesSet = new Set(filteredSlantRhymes);
+            // Front rhymes and near rhymes are objects with word and similarity.
+            // Keep slant matches in the stricter slant category instead of duplicating
+            // or demoting them to broader similarity buckets.
+            const filteredFrontRhymes = frontRhymesList.filter(item =>
+                item.word !== wordToFind &&
+                !/\(\d+\)$/.test(item.word) &&
+                !compoundRhymesSet.has(item.word) &&
+                !slantRhymesSet.has(item.word)
+            );
+
             const filteredNearRhymes = nearRhymesList.filter(item =>
                 item.word !== wordToFind &&
                 !/\(\d+\)$/.test(item.word) &&
