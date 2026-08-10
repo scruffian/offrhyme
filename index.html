@@ -101,8 +101,61 @@
             return phonemes.map( ph => ph.endsWith( '0' ) ? '@' : ph );
         }
 
+        // CMU sometimes splits the near/front vowel before R between IH and IY
+        // for words that rhyme in common speech ("fear" / "hear"). Fold that
+        // split for rhyme keys while preserving the stress marker.
+        function normalizeRColoredVowels( phonemes ) {
+            return phonemes.map( ( ph, index ) => {
+                if ( /^IY[12]$/.test( ph ) && phonemes[ index + 1 ] === 'R' ) {
+                    return ph.replace( 'IY', 'IH' );
+                }
+
+                return ph;
+            } );
+        }
+
+        const AO_AA_RHYME_PATTERNS = [
+            { suffix: /og(?:s|ged|ging)?$/, nextPhoneme: 'G' },
+            { suffix: /(?:ought|aught)s?$/, nextPhoneme: 'T' },
+            { suffix: /alk(?:s|ed|ing)?$/, nextPhoneme: 'K' },
+            { suffix: /all(?:s|ed|ing)?$/, nextPhoneme: 'L' },
+            { suffix: /ause(?:s|d)?$/, nextPhoneme: 'Z' },
+            { suffix: /(?:^|-)gone$/, nextPhoneme: 'N' },
+            { suffix: /ong(?:s|ed|ing)?$/, nextPhoneme: 'NG' },
+        ];
+
+        function shouldNormalizeAoAaRhyme( word, phonemes ) {
+            if ( ! word ) return false;
+            const baseWord = word.replace( /\(\d+\)$/, '' );
+            return AO_AA_RHYME_PATTERNS.some( pattern =>
+                pattern.suffix.test( baseWord ) && phonemes[ 1 ] === pattern.nextPhoneme
+            );
+        }
+
+        // CMU splits some common rhyme families between AO and AA. Fold only
+        // spelling-aware cases to avoid broad false matches like "for" / "far".
+        function normalizeAoAaRhymeVowels( phonemes, word ) {
+            if ( ! shouldNormalizeAoAaRhyme( word, phonemes ) ) {
+                return phonemes;
+            }
+
+            return phonemes.map( ( ph, index ) => {
+                if ( index === 0 && /^AO[12]$/.test( ph ) ) {
+                    return ph.replace( 'AO', 'AA' );
+                }
+
+                return ph;
+            } );
+        }
+
+        function normalizeRhymePhonemes( phonemes, word ) {
+            return normalizeUnstressed(
+                normalizeAoAaRhymeVowels( normalizeRColoredVowels( phonemes ), word )
+            );
+        }
+
         // Extract rhyming part from the last stressed vowel onwards
-        function getRhymingPart( phoneticStr ) {
+        function getRhymingPart( phoneticStr, word = '' ) {
             if (!phoneticStr) return '';
             const phonemes = phoneticStr.split(' ');
 
@@ -117,15 +170,15 @@
 
             // If no primary stress found, fall back to old behavior
             if (lastStressedIndex === -1) {
-                return normalizeUnstressed( phonemes.slice(1) ).join(' ');
+                return normalizeRhymePhonemes( phonemes.slice(1), word ).join(' ');
             }
 
             // Return everything from the last stressed vowel onwards, normalized
-            return normalizeUnstressed( phonemes.slice(lastStressedIndex) ).join(' ');
+            return normalizeRhymePhonemes( phonemes.slice(lastStressedIndex), word ).join(' ');
         }
 
         // Extract rhyming part from the last secondary stressed vowel onwards (for compound words)
-        function getRhymingPartSecondary( phoneticStr ) {
+        function getRhymingPartSecondary( phoneticStr, word = '' ) {
             if (!phoneticStr) return '';
             const phonemes = phoneticStr.split(' ');
 
@@ -144,7 +197,7 @@
             }
 
             // Return everything from the last secondary stressed vowel onwards, normalized
-            return normalizeUnstressed( phonemes.slice(lastSecondaryStressedIndex) ).join(' ');
+            return normalizeRhymePhonemes( phonemes.slice(lastSecondaryStressedIndex), word ).join(' ');
         }
 
         // Extract front rhyming part from beginning to first stressed vowel
@@ -256,14 +309,14 @@
         const slantRhymes = {};
         Object.keys( words ).forEach( word => {
             // Perfect rhymes (back)
-            const rhymingPart = getRhymingPart( words[ word ] );
+            const rhymingPart = getRhymingPart( words[ word ], word );
             if ( ! rhymes[ rhymingPart ] ) {
                 rhymes[ rhymingPart ] = [];
             }
             rhymes[ rhymingPart ].push( word );
 
             // Compound rhymes (secondary stress)
-            const compoundRhymingPart = getRhymingPartSecondary( words[ word ] );
+            const compoundRhymingPart = getRhymingPartSecondary( words[ word ], word );
             if ( compoundRhymingPart ) {
                 if ( ! compoundRhymes[ compoundRhymingPart ] ) {
                     compoundRhymes[ compoundRhymingPart ] = [];
@@ -289,7 +342,7 @@
         } );
 
         function getRhymes( word ) {
-            const rhyme = getRhymingPart( words[ word ] );
+            const rhyme = getRhymingPart( words[ word ], word );
             return rhymes[ rhyme ];
         }
 
@@ -298,7 +351,7 @@
             if (!phonetic) return [];
 
             // Get the primary stress rhyme part
-            const primaryRhyme = getRhymingPart( phonetic );
+            const primaryRhyme = getRhymingPart( phonetic, word );
             if (!primaryRhyme) return [];
 
             // Convert primary stress markers (1) to secondary stress markers (2)
@@ -455,7 +508,7 @@
             const phonetic = words[ word ];
             if (!phonetic) return [];
 
-            const rhymePart = getRhymingPart(phonetic);
+            const rhymePart = getRhymingPart( phonetic, word );
             if (!rhymePart) return [];
 
             const nearRhymesWithScores = [];
