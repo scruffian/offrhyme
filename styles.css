@@ -69,6 +69,10 @@ h2, h3 {
 
 .nav-links {
     margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .nav-links a {
@@ -85,6 +89,42 @@ h2, h3 {
 .nav-links a:hover {
     background: #333;
     border-color: #666;
+}
+
+.how-it-works-toggle {
+    color: #ffffff;
+    padding: 10px 20px;
+    border: 1px solid #444;
+    background: #222;
+    transition: all 0.2s ease;
+    font-size: var(--font-base);
+    font-weight: 400;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+}
+
+.how-it-works-toggle:hover {
+    background: #333;
+    border-color: #666;
+}
+
+.site-footer {
+    text-align: center;
+    margin-top: 40px;
+    padding: 20px 0;
+    color: #666;
+    font-size: var(--font-sm);
+}
+
+.site-footer a {
+    color: #999;
+    text-decoration: none;
+    border-bottom: 1px solid #444;
+}
+
+.site-footer a:hover {
+    color: #ffffff;
+    border-bottom-color: #666;
 }
 
 .search-section {
@@ -249,6 +289,36 @@ button:hover {
 
 .rhyme-section {
     margin-top: 30px;
+    scroll-margin-top: 70px;
+}
+
+.section-nav {
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.section-nav.show {
+    display: flex;
+}
+
+.section-nav-link {
+    padding: 6px 14px;
+    font-size: var(--font-sm);
+    color: #ffffff;
+    text-decoration: none;
+    border: 1px solid #444;
+    background: #222;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    flex: 1 1 auto;
+    text-align: center;
+    min-width: fit-content;
+}
+
+.section-nav-link:hover {
+    filter: brightness(1.4);
 }
 
 .rhyme-section:last-child {
@@ -288,49 +358,13 @@ button:hover {
     flex: 1 1 auto;
     text-align: center;
     min-width: fit-content;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
 }
 
 .rhyme-word:hover {
-    transform: translateY(-1px);
-}
-
-/* Popularity color tiers - subtle grayscale */
-.popularity-very-high {
-    background: #ffffff;
-    color: #000;
-    border-color: #ffffff;
-    font-weight: 600;
-}
-
-.popularity-high {
-    background: #e0e0e0;
-    color: #000;
-    border-color: #e0e0e0;
-    font-weight: 500;
-}
-
-.popularity-medium {
-    background: #999;
-    color: #fff;
-    border-color: #999;
-}
-
-.popularity-low {
-    background: #666;
-    color: #fff;
-    border-color: #666;
-}
-
-.popularity-very-low {
-    background: transparent;
-    color: #ccc;
-    border-color: #666;
-}
-
-.popularity-rare {
-    background: transparent;
-    color: #888;
-    border-color: #444;
+    filter: brightness(1.3);
 }
 
 .empty-state {
