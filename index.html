@@ -101,12 +101,31 @@
     <script src="wordFrequency.js"></script>
     <script>
 
-        // Normalize unstressed vowels (CMU stress marker 0) to a single schwa symbol.
-        // Why: CMU dict inconsistently transcribes the unstressed final vowel in words
-        // like "darkness" (AH0) vs "starkness" (IH0), which sound identical. Collapsing
-        // them lets the rhyme key match across these inconsistencies.
+        // The unstressed vowels CMU uses interchangeably for a true schwa. "darkness"
+        // (AH0) and "starkness" (IH0) are transcribed differently but sound identical,
+        // so folding them lets the rhyme key match across that inconsistency.
+        const SCHWA_LIKE_VOWELS = new Set( [ 'AH0', 'IH0' ] );
+
+        // Normalize schwa-like unstressed vowels to a single symbol. Only these fold:
+        // ER0 ("fodder"), OW0 ("colorado") and a word-final IY0 ("body") are audibly
+        // distinct endings, so collapsing every stress-0 vowel would make each of
+        // -y / -er / -o / -a a perfect rhyme for all the others. Word-internal IY0 is
+        // the exception — it reduces to schwa and CMU can't keep it straight either
+        // ("beautiful" AH0 vs "dutiful" IY0), so fold it there but not in final
+        // position, where it is the whole difference between "body" and "colorado".
         function normalizeUnstressed( phonemes ) {
-            return phonemes.map( ph => ph.endsWith( '0' ) ? '@' : ph );
+            const lastIndex = phonemes.length - 1;
+            return phonemes.map( ( ph, index ) => {
+                if ( SCHWA_LIKE_VOWELS.has( ph ) ) {
+                    return '@';
+                }
+
+                if ( ph === 'IY0' && index < lastIndex ) {
+                    return '@';
+                }
+
+                return ph;
+            } );
         }
 
         // CMU sometimes splits the near/front vowel before R between IH and IY
@@ -349,9 +368,47 @@
             }
         } );
 
+        // CMU records a word's alternate pronunciations as "word(2)", "word(3)".
+        function stripPronunciationIndex( word ) {
+            return word.replace( /\(\d+\)$/, '' );
+        }
+
+        // Every CMU entry for a word: the base entry plus its numbered variants.
+        // These are all real pronunciations, and sometimes only a variant carries
+        // the rhyme: "carrot" is K AE1 R AH0 T but "carrot(2)" is K EH1 R AH0 T,
+        // and only the second rhymes with "parrot"; likewise "stronger(2)" holds
+        // the hard G that rhymes with "longer". Looking at the base entry alone
+        // misses those, so search every pronunciation the word has.
+        function pronunciationsOf( word ) {
+            const forms = words[ word ] ? [ word ] : [];
+            for ( let index = 2; words[ `${ word }(${ index })` ]; index++ ) {
+                forms.push( `${ word }(${ index })` );
+            }
+            return forms;
+        }
+
+        // Fold a result list back onto base words: drop the search word (under any
+        // of its pronunciations), de-duplicate, and surface "stronger(2)" as the
+        // "stronger" the reader is looking for.
+        function collapseVariants( wordList, searchWord ) {
+            const searchBase = stripPronunciationIndex( searchWord );
+            const seen = new Set();
+
+            return ( wordList || [] ).reduce( ( collapsed, word ) => {
+                const baseWord = stripPronunciationIndex( word );
+                if ( baseWord !== searchBase && ! seen.has( baseWord ) ) {
+                    seen.add( baseWord );
+                    collapsed.push( baseWord );
+                }
+                return collapsed;
+            }, [] );
+        }
+
         function getRhymes( word ) {
-            const rhyme = getRhymingPart( words[ word ], word );
-            return rhymes[ rhyme ];
+            return pronunciationsOf( word ).reduce( ( matches, form ) => {
+                const rhyme = getRhymingPart( words[ form ], form );
+                return matches.concat( rhymes[ rhyme ] || [] );
+            }, [] );
         }
 
         function getCompoundRhymes( word ) {
@@ -514,7 +571,8 @@
 
         // Vowel phonemes, used to find the nucleus of a rhyme key and to count
         // the syllables trailing it. '@' is the schwa that normalizeUnstressed
-        // collapses unstressed vowels down to.
+        // folds the schwa-like unstressed vowels down to; the unstressed vowels it
+        // leaves alone still arrive here with their stress digit attached.
         const VOWEL_PHONEMES = new Set( [
             'AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH', 'ER',
             'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW', '@',
@@ -895,10 +953,7 @@
             // Multiple words mode: show perfect rhymes for each word in columns
             if (words.length > 1) {
                 const wordRhymes = words.map(wordToFind => {
-                    const rhymesList = getRhymes(wordToFind);
-                    const filteredRhymes = rhymesList
-                        ? rhymesList.filter(word => word !== wordToFind && !/\(\d+\)$/.test(word))
-                        : [];
+                    const filteredRhymes = collapseVariants( getRhymes(wordToFind), wordToFind );
 
                     // Sort by frequency
                     const sortedRhymes = filteredRhymes.sort((a, b) => {
@@ -942,21 +997,25 @@
             const voicingRhymesList = getVoicingRhymes( wordToFind );
             const consonanceRhymesList = getConsonanceRhymes( wordToFind );
 
-            // Filter out the search word itself and alternate pronunciations (e.g., "word(2)")
-            const filteredRhymes = rhymesList
-                ? rhymesList.filter(word => word !== wordToFind && !/\(\d+\)$/.test(word))
-                : [];
+            // Fold alternate pronunciations (e.g. "word(2)") back onto the base word
+            // and drop the search word itself.
+            const filteredRhymes = collapseVariants( rhymesList, wordToFind );
 
-            // Sort compound rhymes by word frequency
-            const sortedCompoundRhymes = compoundRhymesList.sort((a, b) => {
-                const freqA = wordFrequency[a] || 0;
-                const freqB = wordFrequency[b] || 0;
-                return freqB - freqA;
-            });
+            const perfectRhymesSet = new Set(filteredRhymes);
+
+            // Sort compound rhymes by word frequency. A word that already landed in
+            // the perfect list stays there: a secondary-stress match is the weaker
+            // claim, and some entries ("isu" against "blue") qualify as both.
+            const sortedCompoundRhymes = compoundRhymesList
+                .filter(w => !perfectRhymesSet.has(w))
+                .sort((a, b) => {
+                    const freqA = wordFrequency[a] || 0;
+                    const freqB = wordFrequency[b] || 0;
+                    return freqB - freqA;
+                });
 
             // Create a Set of compound rhyme words for efficient filtering
             const compoundRhymesSet = new Set(sortedCompoundRhymes);
-            const perfectRhymesSet = new Set(filteredRhymes);
 
             const shownBeforeVoicing = new Set([
                 ...perfectRhymesSet,
@@ -978,33 +1037,42 @@
                 .slice(0, 100);
 
             const slantRhymesSet = new Set(filteredSlantRhymes);
+
             // Front rhymes and near rhymes are objects with word and similarity.
-            // Keep slant matches in the stricter slant category instead of duplicating
-            // or demoting them to broader similarity buckets.
+            // Each section only shows what the sections above it did not: a word
+            // belongs in the strictest category that claims it, so the running
+            // "shown before" set carries all the way down to consonance rather
+            // than stopping at slant.
+            const shownBeforeFront = new Set([
+                ...shownBeforeSlant,
+                ...slantRhymesSet,
+            ]);
             const filteredFrontRhymes = frontRhymesList.filter(item =>
                 item.word !== wordToFind &&
                 !/\(\d+\)$/.test(item.word) &&
-                !compoundRhymesSet.has(item.word) &&
-                !voicingRhymesSet.has(item.word) &&
-                !slantRhymesSet.has(item.word)
+                !shownBeforeFront.has(item.word)
             );
 
+            const shownBeforeNear = new Set([
+                ...shownBeforeFront,
+                ...filteredFrontRhymes.map(item => item.word),
+            ]);
             // Capped like the slant rhymes: past this point the matches are too
             // loose to be worth the scroll.
             const filteredNearRhymes = nearRhymesList.filter(item =>
                 item.word !== wordToFind &&
                 !/\(\d+\)$/.test(item.word) &&
-                !compoundRhymesSet.has(item.word) &&
-                !voicingRhymesSet.has(item.word) &&
-                !slantRhymesSet.has(item.word)
+                !shownBeforeNear.has(item.word)
             ).slice(0, 100);
 
+            const shownBeforeConsonance = new Set([
+                ...shownBeforeNear,
+                ...filteredNearRhymes.map(item => item.word),
+            ]);
             const filteredConsonanceRhymes = consonanceRhymesList.filter(word =>
                 word !== wordToFind &&
                 !/\(\d+\)$/.test(word) &&
-                !compoundRhymesSet.has(word) &&
-                !voicingRhymesSet.has(word) &&
-                !slantRhymesSet.has(word)
+                !shownBeforeConsonance.has(word)
             ).slice(0, 100);
 
             // Sort perfect rhymes by word frequency

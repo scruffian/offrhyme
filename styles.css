@@ -339,13 +339,16 @@ button:hover {
     gap: 30px;
 }
 
+/* One section per row. Kept as a flex column rather than a plain block so the
+   `order` overrides in the mobile media query still apply; wrapping a row let
+   two short sections (a one-word Perfect list beside a short Voicing list) sit
+   side by side with their headings colliding. */
 #result {
     font-size: var(--font-base);
     word-wrap: break-word;
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 8px;
-    align-items: flex-start;
 }
 
 .rhyme-word {
