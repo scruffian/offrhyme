@@ -69,6 +69,10 @@
                     <span><strong>Compound rhymes</strong> — match on secondary stress (e.g. "lime" with "daytime")</span>
                 </div>
                 <div class="legend-item">
+                    <div class="legend-color" style="background: rgba(70, 205, 215, 0.7); border: 1px solid rgba(70, 205, 215, 0.85);"></div>
+                    <span><strong>Voicing twins</strong> — same vowel, same consonants, voicing flipped (e.g. "trees" with "geese")</span>
+                </div>
+                <div class="legend-item">
                     <div class="legend-color" style="background: rgba(230, 110, 180, 0.7); border: 1px solid rgba(230, 110, 180, 0.85);"></div>
                     <span><strong>Slant rhymes</strong> — same short vowel with matching or similar final consonants</span>
                 </div>
@@ -78,10 +82,14 @@
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: rgba(180, 130, 240, 0.7); border: 1px solid rgba(180, 130, 240, 0.85);"></div>
-                    <span><strong>Near rhymes</strong> — similar but inexact phoneme pattern</span>
+                    <span><strong>Near rhymes</strong> — same vowel, consonants bent around it (e.g. "trees" with "leaves")</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: rgba(235, 100, 100, 0.7); border: 1px solid rgba(235, 100, 100, 0.85);"></div>
+                    <span><strong>Consonance rhymes</strong> — same consonants, different vowel (e.g. "leaves" with "loves")</span>
                 </div>
             </div>
-            <div class="legend-title" style="margin-top: 15px;">Fill intensity = word commonness (perfect / compound / slant) or match quality (front / near).</div>
+            <div class="legend-title" style="margin-top: 15px;">Fill intensity = word commonness (perfect / compound / voicing / slant / consonance) or match quality (front / near).</div>
         </div>
 
         <footer class="site-footer">
@@ -504,69 +512,312 @@
             return score;
         }
 
-        function getNearRhymes( word ) {
-            const phonetic = words[ word ];
-            if (!phonetic) return [];
+        // Vowel phonemes, used to find the nucleus of a rhyme key and to count
+        // the syllables trailing it. '@' is the schwa that normalizeUnstressed
+        // collapses unstressed vowels down to.
+        const VOWEL_PHONEMES = new Set( [
+            'AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH', 'ER',
+            'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW', '@',
+        ] );
 
-            const rhymePart = getRhymingPart( phonetic, word );
-            if (!rhymePart) return [];
+        // Vowels near enough that swapping one barely disturbs the rhyme
+        // ("leaves" / "lives" against "leaves" / "loves"). Used to order the
+        // consonance matches, where the vowel is the only thing that moves.
+        const NEIGHBOUR_VOWEL_PAIRS = [
+            [ 'IY', 'IH' ], [ 'IH', 'EH' ], [ 'EH', 'AE' ], [ 'AE', 'AH' ],
+            [ 'AH', 'AA' ], [ 'AA', 'AO' ], [ 'AO', 'OW' ], [ 'UH', 'UW' ],
+            [ 'AH', 'UH' ],
+        ];
 
-            const nearRhymesWithScores = [];
-            const perfectRhymes = getRhymes(word) || [];
+        const NEIGHBOUR_VOWELS = {};
+        NEIGHBOUR_VOWEL_PAIRS.forEach( ( [ a, b ] ) => {
+            NEIGHBOUR_VOWELS[ a ] = ( NEIGHBOUR_VOWELS[ a ] || [] ).concat( b );
+            NEIGHBOUR_VOWELS[ b ] = ( NEIGHBOUR_VOWELS[ b ] || [] ).concat( a );
+        } );
 
-            // Strategy: Look for rhyme patterns that differ slightly
-            // Look through existing rhyme groups for similar patterns
-            Object.keys(rhymes).forEach(rhymePattern => {
-                // Skip if it's an exact match
-                if (rhymePattern === rhymePart) return;
+        // Consonants that differ only by voicing, or that share a manner of
+        // articulation, swap for each other cheaply ("trees" / "geese").
+        // Deliberately no L/R class: r-colouring reshapes the vowel it follows,
+        // so "heart" and "alt" are further apart than the liquids suggest.
+        const NEAR_CONSONANT_CLASSES = {
+            P: 'STOP_LABIAL', B: 'STOP_LABIAL',
+            T: 'STOP_ALVEOLAR', D: 'STOP_ALVEOLAR',
+            K: 'STOP_VELAR', G: 'STOP_VELAR',
+            F: 'FRICATIVE_LABIAL', V: 'FRICATIVE_LABIAL',
+            TH: 'FRICATIVE_DENTAL', DH: 'FRICATIVE_DENTAL',
+            S: 'SIBILANT', Z: 'SIBILANT', SH: 'SIBILANT', ZH: 'SIBILANT',
+            CH: 'AFFRICATE', JH: 'AFFRICATE',
+            M: 'NASAL', N: 'NASAL', NG: 'NASAL',
+        };
 
-                // Check if patterns are similar (share ending or differ by one phoneme)
-                const targetPhonemes = rhymePart.split(' ');
-                const patternPhonemes = rhymePattern.split(' ');
+        // Consonants that are the same sound but for voicing. Turning the
+        // voicing of a whole coda on or off is the smallest change a rhyme can
+        // make without staying perfect ("trees" / "geese", "night" / "side").
+        const VOICING_PAIRS = {
+            P: 'B', B: 'P', T: 'D', D: 'T', K: 'G', G: 'K',
+            F: 'V', V: 'F', TH: 'DH', DH: 'TH', S: 'Z', Z: 'S',
+            SH: 'ZH', ZH: 'SH', CH: 'JH', JH: 'CH',
+        };
 
-                // Similar if they share the last phoneme (ignoring stress)
-                const targetLast = targetPhonemes[targetPhonemes.length - 1].replace(/[012]/g, '');
-                const patternLast = patternPhonemes[patternPhonemes.length - 1].replace(/[012]/g, '');
+        // How many consonants two codas differ by in voicing alone. Null when
+        // they differ in any other way, including not at all.
+        function voicingSwapCount( a, b ) {
+            if ( a.length !== b.length ) return null;
 
-                // Allow patterns of similar length (within 2 phonemes)
-                const lengthDiff = Math.abs(targetPhonemes.length - patternPhonemes.length);
+            let swaps = 0;
+            for ( let i = 0; i < a.length; i++ ) {
+                if ( a[ i ] === b[ i ] ) continue;
+                if ( VOICING_PAIRS[ a[ i ] ] !== b[ i ] ) return null;
+                swaps++;
+            }
 
-                if (targetLast === patternLast && lengthDiff <= 2) {
-                    // Add words from this rhyme group with similarity scores
-                    rhymes[rhymePattern].slice(0, 30).forEach(w => {
-                        if (w !== word && !perfectRhymes.includes(w)) {
-                            const similarity = calculateSimilarity(phonetic, words[w]);
-                            if (similarity > 0) {  // Only include if there's some similarity
-                                nearRhymesWithScores.push({ word: w, similarity });
-                            }
-                        }
-                    });
+            return swaps > 0 ? swaps : null;
+        }
+
+        // Split a rhyme key (as produced by getRhymingPart) into the stressed
+        // vowel and the phonemes that follow it. Null when the key has no vowel.
+        function splitRhymeKey( rhymeKey ) {
+            const phonemes = rhymeKey.split( ' ' ).filter( Boolean );
+            const nucleusIndex = phonemes.findIndex(
+                phoneme => VOWEL_PHONEMES.has( phoneme.replace( /[012]/g, '' ) )
+            );
+            if ( nucleusIndex === -1 ) return null;
+
+            return {
+                nucleus: phonemes[ nucleusIndex ].replace( /[012]/g, '' ),
+                coda: phonemes.slice( nucleusIndex + 1 ),
+            };
+        }
+
+        function countTailSyllables( coda ) {
+            return coda.filter(
+                phoneme => VOWEL_PHONEMES.has( phoneme.replace( /[012]/g, '' ) )
+            ).length;
+        }
+
+        function substitutionCost( a, b ) {
+            if ( a === b ) return 0;
+            const classA = NEAR_CONSONANT_CLASSES[ a ];
+            return classA && classA === NEAR_CONSONANT_CLASSES[ b ] ? 0.5 : 1;
+        }
+
+        // Edit distance between two codas, counted in phonemes, where swapping a
+        // consonant for a close relative costs half of an insertion.
+        function codaDistance( a, b ) {
+            let previousRow = [];
+            for ( let j = 0; j <= b.length; j++ ) {
+                previousRow.push( j );
+            }
+
+            for ( let i = 1; i <= a.length; i++ ) {
+                const row = [ i ];
+                for ( let j = 1; j <= b.length; j++ ) {
+                    row.push( Math.min(
+                        previousRow[ j ] + 1,
+                        row[ j - 1 ] + 1,
+                        previousRow[ j - 1 ] + substitutionCost( a[ i - 1 ], b[ j - 1 ] )
+                    ) );
                 }
-            });
+                previousRow = row;
+            }
 
-            // Sort by similarity (highest first), then by frequency within each similarity level
-            return nearRhymesWithScores
-                .sort((a, b) => {
-                    // Primary sort: similarity (descending)
-                    if (a.similarity !== b.similarity) {
-                        return b.similarity - a.similarity;
+            return previousRow[ b.length ];
+        }
+
+        // How many phonemes two codas share at their end — the strongest single
+        // cue that two words chime, since it is the sound the ear leaves on.
+        function sharedEndingLength( a, b ) {
+            let shared = 0;
+            while (
+                shared < a.length &&
+                shared < b.length &&
+                a[ a.length - 1 - shared ] === b[ b.length - 1 - shared ]
+            ) {
+                shared++;
+            }
+            return shared;
+        }
+
+        const NEAR_RHYME_MAX_DISTANCE = 2;
+
+        // How far a vowel has moved, for ordering consonance matches.
+        function vowelChangeRank( a, b ) {
+            return ( NEIGHBOUR_VOWELS[ a ] || [] ).includes( b ) ? 1 : 2;
+        }
+
+        // Score two rhyme keys built on the same stressed vowel; higher is
+        // closer, null means too far apart to offer. Ending on the same
+        // consonant matters more than the raw number of edits, and gaining or
+        // losing a syllable after the stress reshapes the word enough to cost
+        // more than a shared ending is worth.
+        // Post-vocalic R colours the vowel it follows rather than sitting on the
+        // end of it, so "heart" is built on a different sound from "hot" however
+        // neatly the rest of the consonants line up.
+        function isRColoured( coda ) {
+            return coda[ 0 ] === 'R';
+        }
+
+        function scoreNearRhyme( target, candidate ) {
+            // A coda that only changes voicing is closer than any of this, and
+            // has its own section.
+            if ( voicingSwapCount( target.coda, candidate.coda ) !== null ) return null;
+
+            // Gaining or losing the R changes the vowel, not just the coda.
+            if ( isRColoured( target.coda ) !== isRColoured( candidate.coda ) ) return null;
+
+            const distance = codaDistance( target.coda, candidate.coda );
+            if ( distance > NEAR_RHYME_MAX_DISTANCE ) return null;
+
+            const shared = sharedEndingLength( target.coda, candidate.coda );
+            const syllableDiff = Math.abs(
+                countTailSyllables( target.coda ) - countTailSyllables( candidate.coda )
+            );
+
+            return Math.round(
+                100 - distance * 22 + shared * 16 - syllableDiff * 18
+            );
+        }
+
+        // Index every rhyme key by its stressed vowel, and by the consonant frame
+        // that follows it, so a search only scores the keys that could plausibly
+        // match rather than all forty thousand of them.
+        const rhymeKeysByNucleus = {};
+        const rhymeKeysByCoda = {};
+        Object.keys( rhymes ).forEach( rhymeKey => {
+            const parts = splitRhymeKey( rhymeKey );
+            if ( ! parts ) return;
+
+            const entry = { key: rhymeKey, nucleus: parts.nucleus, coda: parts.coda };
+            rhymeKeysByNucleus[ parts.nucleus ] = rhymeKeysByNucleus[ parts.nucleus ] || [];
+            rhymeKeysByNucleus[ parts.nucleus ].push( entry );
+
+            const codaKey = parts.coda.join( ' ' );
+            rhymeKeysByCoda[ codaKey ] = rhymeKeysByCoda[ codaKey ] || [];
+            rhymeKeysByCoda[ codaKey ].push( entry );
+        } );
+
+        // The rhyme tail of a word, split into vowel and coda. Null when the
+        // word is unknown or its tail has no vowel to build on.
+        function getRhymeTarget( word ) {
+            const phonetic = words[ word ];
+            if ( ! phonetic ) return null;
+
+            const key = getRhymingPart( phonetic, word );
+            const target = splitRhymeKey( key );
+            return target ? Object.assign( { key }, target ) : null;
+        }
+
+        // Closest first, then the words most likely to be usable.
+        function sortByCloseness( matches ) {
+            return matches
+                .sort( ( a, b ) => {
+                    if ( a.distance !== b.distance ) {
+                        return a.distance - b.distance;
                     }
-                    // Secondary sort: frequency (higher frequency = more common first)
-                    const freqA = wordFrequency[a.word] || 0;
-                    const freqB = wordFrequency[b.word] || 0;
+
+                    const freqA = wordFrequency[ a.word ] || 0;
+                    const freqB = wordFrequency[ b.word ] || 0;
+                    if ( freqA !== freqB ) {
+                        return freqB - freqA;
+                    }
+
+                    return a.word.localeCompare( b.word );
+                } )
+                .map( match => match.word );
+        }
+
+        // Words that keep the stressed vowel and the whole consonant frame, and
+        // only turn its voicing on or off. Empty for a coda with no voiceless
+        // counterpart to reach for, such as the M of "time".
+        function getVoicingRhymes( word ) {
+            const target = getRhymeTarget( word );
+            if ( ! target || target.coda.length === 0 ) return [];
+
+            const matches = [];
+            ( rhymeKeysByNucleus[ target.nucleus ] || [] ).forEach( candidate => {
+                const swaps = voicingSwapCount( target.coda, candidate.coda );
+                if ( swaps === null ) return;
+
+                rhymes[ candidate.key ].forEach( w => {
+                    if ( w !== word ) matches.push( { word: w, distance: swaps } );
+                } );
+            } );
+
+            return sortByCloseness( matches );
+        }
+
+        // Words built on the same consonant frame but a different vowel
+        // ("leaves" / "loves"). A single consonant cannot carry the chime on its
+        // own — it would make "was" a match for "trees" — so this needs a tail
+        // of at least two phonemes after the stressed vowel.
+        const CONSONANCE_MIN_CODA = 2;
+
+        function getConsonanceRhymes( word ) {
+            const target = getRhymeTarget( word );
+            if ( ! target || target.coda.length < CONSONANCE_MIN_CODA ) return [];
+
+            const matches = [];
+            ( rhymeKeysByCoda[ target.coda.join( ' ' ) ] || [] ).forEach( candidate => {
+                if ( candidate.nucleus === target.nucleus ) return;
+
+                const distance = vowelChangeRank( target.nucleus, candidate.nucleus );
+                rhymes[ candidate.key ].forEach( w => {
+                    if ( w !== word ) matches.push( { word: w, distance } );
+                } );
+            } );
+
+            return sortByCloseness( matches );
+        }
+
+        // Words on the same stressed vowel whose consonants bend around it
+        // ("trees" / "leaves"). A vowel change belongs to consonance instead.
+        function getNearRhymes( word ) {
+            const target = getRhymeTarget( word );
+            if ( ! target ) return [];
+
+            const perfectRhymes = new Set( getRhymes( word ) || [] );
+            const nearRhymesWithScores = [];
+
+            ( rhymeKeysByNucleus[ target.nucleus ] || [] ).forEach( candidate => {
+                // The same key means a perfect rhyme, which has its own section.
+                if ( candidate.key === target.key ) return;
+
+                const similarity = scoreNearRhyme( target, candidate );
+                if ( similarity === null ) return;
+
+                rhymes[ candidate.key ].forEach( w => {
+                    if ( w === word || perfectRhymes.has( w ) ) return;
+                    nearRhymesWithScores.push( { word: w, similarity } );
+                } );
+            } );
+
+            // Closest first, then the most usable words within each tier.
+            return nearRhymesWithScores.sort( ( a, b ) => {
+                if ( a.similarity !== b.similarity ) {
+                    return b.similarity - a.similarity;
+                }
+
+                const freqA = wordFrequency[ a.word ] || 0;
+                const freqB = wordFrequency[ b.word ] || 0;
+                if ( freqA !== freqB ) {
                     return freqB - freqA;
-                });
+                }
+
+                return a.word.localeCompare( b.word );
+            } );
         }
 
         // Distinct hue per rhyme section. Fill intensity carries the section's variable
         // (frequency for perfect/compound/slant, similarity for front/near); the hue
         // just identifies which section a pill belongs to.
         const SECTION_HUE = {
-            perfect:  { r:  80, g: 220, b: 140 },  // green
-            compound: { r: 255, g: 180, b:  90 },  // amber
-            slant:    { r: 230, g: 110, b: 180 },  // pink
-            front:    { r: 100, g: 170, b: 240 },  // sky blue
-            near:     { r: 180, g: 130, b: 240 },  // purple
+            perfect:    { r:  80, g: 220, b: 140 },  // green
+            compound:   { r: 255, g: 180, b:  90 },  // amber
+            voicing:    { r:  70, g: 205, b: 215 },  // cyan
+            slant:      { r: 230, g: 110, b: 180 },  // pink
+            front:      { r: 100, g: 170, b: 240 },  // sky blue
+            near:       { r: 180, g: 130, b: 240 },  // purple
+            consonance: { r: 235, g: 100, b: 100 },  // red
         };
 
         function pillStyle(rgb, t) {
@@ -680,13 +931,16 @@
                 return;
             }
 
-            // Single word mode: show perfect, compound, slant, near, and front rhymes
+            // Single word mode: show perfect, compound, voicing, slant, front,
+            // near and consonance rhymes
             const wordToFind = words[0];
             const rhymesList = getRhymes( wordToFind );
             const compoundRhymesList = getCompoundRhymes( wordToFind );
             const frontRhymesList = getFrontRhymes( wordToFind );
             const nearRhymesList = getNearRhymes( wordToFind );
             const slantRhymesList = getSlantRhymes( wordToFind );
+            const voicingRhymesList = getVoicingRhymes( wordToFind );
+            const consonanceRhymesList = getConsonanceRhymes( wordToFind );
 
             // Filter out the search word itself and alternate pronunciations (e.g., "word(2)")
             const filteredRhymes = rhymesList
@@ -704,9 +958,19 @@
             const compoundRhymesSet = new Set(sortedCompoundRhymes);
             const perfectRhymesSet = new Set(filteredRhymes);
 
-            const shownBeforeSlant = new Set([
+            const shownBeforeVoicing = new Set([
                 ...perfectRhymesSet,
                 ...compoundRhymesSet,
+            ]);
+            const filteredVoicingRhymes = voicingRhymesList
+                .filter(w => !shownBeforeVoicing.has(w) && !/\(\d+\)$/.test(w))
+                .slice(0, 100);
+
+            const voicingRhymesSet = new Set(filteredVoicingRhymes);
+
+            const shownBeforeSlant = new Set([
+                ...shownBeforeVoicing,
+                ...voicingRhymesSet,
             ]);
             const filteredSlantRhymes = slantRhymesList
                 .filter(w => !shownBeforeSlant.has(w))
@@ -721,15 +985,27 @@
                 item.word !== wordToFind &&
                 !/\(\d+\)$/.test(item.word) &&
                 !compoundRhymesSet.has(item.word) &&
+                !voicingRhymesSet.has(item.word) &&
                 !slantRhymesSet.has(item.word)
             );
 
+            // Capped like the slant rhymes: past this point the matches are too
+            // loose to be worth the scroll.
             const filteredNearRhymes = nearRhymesList.filter(item =>
                 item.word !== wordToFind &&
                 !/\(\d+\)$/.test(item.word) &&
                 !compoundRhymesSet.has(item.word) &&
+                !voicingRhymesSet.has(item.word) &&
                 !slantRhymesSet.has(item.word)
-            );
+            ).slice(0, 100);
+
+            const filteredConsonanceRhymes = consonanceRhymesList.filter(word =>
+                word !== wordToFind &&
+                !/\(\d+\)$/.test(word) &&
+                !compoundRhymesSet.has(word) &&
+                !voicingRhymesSet.has(word) &&
+                !slantRhymesSet.has(word)
+            ).slice(0, 100);
 
             // Sort perfect rhymes by word frequency
             const sortedRhymes = filteredRhymes.sort((a, b) => {
@@ -767,6 +1043,18 @@
                 `);
             }
 
+            if (filteredVoicingRhymes.length > 0) {
+                navSections.push({ id: 'section-voicing', label: 'Voicing' });
+                sectionsHtml.push(`
+                    <div class="rhyme-section" id="section-voicing">
+                        <h3>Voicing Twins</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${renderRhymeWords(filteredVoicingRhymes, SECTION_HUE.voicing)}
+                        </div>
+                    </div>
+                `);
+            }
+
             if (filteredSlantRhymes.length > 0) {
                 navSections.push({ id: 'section-slant', label: 'Slant' });
                 sectionsHtml.push(`
@@ -798,6 +1086,18 @@
                         <h3>Near Rhymes</h3>
                         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                             ${renderNearRhymeWords(sortedNearRhymes, SECTION_HUE.near)}
+                        </div>
+                    </div>
+                `);
+            }
+
+            if (filteredConsonanceRhymes.length > 0) {
+                navSections.push({ id: 'section-consonance', label: 'Consonance' });
+                sectionsHtml.push(`
+                    <div class="rhyme-section" id="section-consonance">
+                        <h3>Consonance Rhymes</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${renderRhymeWords(filteredConsonanceRhymes, SECTION_HUE.consonance)}
                         </div>
                     </div>
                 `);
